@@ -40,6 +40,7 @@ func SetupRoutes(mux *http.ServeMux, authSvc services.AuthService, logSvc servic
 	mux.Handle("POST /api/log/photo", requireAuth(http.HandlerFunc(handler.PhotoLogEntry)))
 	mux.Handle("POST /api/log/chat", requireAuth(http.HandlerFunc(handler.ChatLogEntry)))
 	mux.Handle("POST /api/log/{id}/edit", requireAuth(http.HandlerFunc(handler.EditLogEntry)))
+	mux.Handle("POST /api/log/{id}/clone", requireAuth(http.HandlerFunc(handler.CloneLogEntry)))
 	mux.Handle("POST /api/weight", requireAuth(csrf(http.HandlerFunc(handler.PostWeight))))
 }
 
@@ -235,6 +236,52 @@ func (h *APIHandler) EditLogEntry(w http.ResponseWriter, r *http.Request) {
 	if err := h.entryTmpl.ExecuteTemplate(w, "log-entry-row", updated); err != nil {
 		http.Error(w, "template error: "+err.Error(), http.StatusInternalServerError)
 	}
+}
+
+// CloneLogEntry handles POST /api/log/{id}/clone.
+// Creates a new log entry copied from the original with the current timestamp.
+func (h *APIHandler) CloneLogEntry(w http.ResponseWriter, r *http.Request) {
+	user, ok := middleware.UserFromContext(r.Context())
+	if !ok {
+		writeJSONError(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	idStr := r.PathValue("id")
+	entryID, err := strconv.Atoi(idStr)
+	if err != nil {
+		writeJSONError(w, "invalid entry id", http.StatusBadRequest)
+		return
+	}
+
+	original, err := h.logSvc.GetEntry(r.Context(), user.ID, entryID)
+	if err != nil {
+		writeJSONError(w, "entry not found", http.StatusNotFound)
+		return
+	}
+
+	clone := models.LogEntry{
+		UserID:   user.ID,
+		FoodName: original.FoodName,
+		Calories: original.Calories,
+		ProteinG: original.ProteinG,
+		FatG:     original.FatG,
+		CarbsG:   original.CarbsG,
+		Amount:   original.Amount,
+		Unit:     original.Unit,
+	}
+
+	created, err := h.logSvc.AddEntry(r.Context(), user.ID, clone)
+	if err != nil {
+		writeJSONError(w, "failed to clone entry", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(struct { //nolint:errcheck
+		Data  interface{} `json:"data"`
+		Error *string     `json:"error"`
+	}{Data: created})
 }
 
 type chatRequest struct {

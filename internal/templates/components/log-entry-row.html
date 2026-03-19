@@ -13,6 +13,8 @@
     </div>
     <div class="entry-actions">
       <button class="btn btn--secondary btn--sm"
+              onclick="cloneEntry({{.ID}})" title="Log again">&#x2398;</button>
+      <button class="btn btn--secondary btn--sm"
               onclick="toggleEdit({{.ID}})" title="Edit">&#x270E;</button>
       <button class="btn btn--danger btn--sm"
         hx-delete="/api/log/{{.ID}}"

@@ -204,6 +204,7 @@
           '<span class="macro carb">C: ' + Math.round(entry.CarbsG) + 'g</span>' +
         '</div>' +
         '<div class="entry-actions">' +
+          '<button class="btn btn--secondary btn--sm" onclick="cloneEntry(' + id + ')" title="Log again">&#x2398;</button>' +
           '<button class="btn btn--secondary btn--sm" onclick="toggleEdit(' + id + ')" title="Edit">&#x270E;</button>' +
           '<button class="btn btn--danger btn--sm"' +
             ' hx-delete="/api/log/' + id + '"' +
@@ -349,6 +350,30 @@
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { window.submitAnswer(); }
   });
+
+  // --- Clone entry ---
+  window.cloneEntry = function(id) {
+    fetch('/api/log/' + id + '/clone', {method: 'POST'})
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        if (data.error) { alert('Clone failed: ' + data.error); return; }
+        var entry = data.data;
+        {{if .IsToday}}
+        addEntryToList(entry);
+        updateSummaryBar(entry);
+        {{else}}
+        // Logged to today — show brief confirmation
+        var notice = document.createElement('div');
+        notice.className = 'alert alert--success';
+        notice.textContent = 'Logged \u201c' + entry.FoodName + '\u201d to today.';
+        notice.style.marginBottom = '0.5rem';
+        var list = document.getElementById('entry-list');
+        list.parentNode.insertBefore(notice, list);
+        setTimeout(function() { notice.remove(); }, 3000);
+        {{end}}
+      })
+      .catch(function() { alert('Clone failed.'); });
+  };
 
   // --- Edit entry ---
   window.toggleEdit = function(id) {
