@@ -1,0 +1,367 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page">
+  <!-- Date Navigation -->
+  <div class="date-nav">
+    <a href="/log?date={{.PrevDate}}" class="date-nav__arrow" title="Previous day">&#8249;</a>
+    <div class="date-nav__center">
+      <input type="date" class="date-nav__picker"
+             value="{{.ViewDateStr}}" max="{{.TodayStr}}"
+             onchange="if(this.value) window.location='/log?date='+this.value">
+      {{if .IsToday}}<span class="date-nav__label">Today</span>{{else}}<span class="date-nav__label">{{.ViewDate.Format "Mon, Jan 2"}}</span>{{end}}
+    </div>
+    <a href="/log?date={{.NextDate}}" class="date-nav__arrow {{if .IsToday}}date-nav__arrow--disabled{{end}}" title="Next day">&#8250;</a>
+  </div>
+
+  <!-- Summary Bar -->
+  <div class="summary-bar">
+    <div class="summary-bar__item">
+      <div class="summary-bar__value">{{.Summary.TotalCalories}} / {{.User.CalorieGoal}}</div>
+      <div class="summary-bar__label">Calories</div>
+    </div>
+    <div class="summary-bar__item">
+      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalProteinG}}g</div>
+      <div class="summary-bar__label">Protein</div>
+    </div>
+    <div class="summary-bar__item">
+      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalFatG}}g</div>
+      <div class="summary-bar__label">Fat</div>
+    </div>
+    <div class="summary-bar__item">
+      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalCarbsG}}g</div>
+      <div class="summary-bar__label">Carbs</div>
+    </div>
+  </div>
+
+  {{if .Error}}
+  <div class="alert alert--error">{{.Error}}</div>
+  {{end}}
+
+  {{if .AIAvailable}}
+  <div class="log-input-section">
+    <!-- Description textarea -->
+    <textarea id="description-input" class="log-textarea"
+              placeholder="What are you eating? (e.g. &ldquo;cutie tangerine&rdquo; or &ldquo;grilled chicken sandwich&rdquo;)&#10;You can also take a photo below."></textarea>
+
+    <!-- Image preview (hidden until photo selected) -->
+    <div id="image-preview-area" style="display:none">
+      <img id="image-preview" src="" alt="Food photo preview" class="photo-preview">
+      <button type="button" class="btn btn--secondary btn--sm photo-clear-btn" onclick="clearPhoto()">
+        Remove photo
+      </button>
+    </div>
+
+    <div id="ai-error" class="alert alert--error" style="display:none"></div>
+
+    <!-- Action row: photo button + Log It -->
+    <div class="log-action-row">
+      <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none">
+      <button type="button" class="btn btn--secondary" onclick="document.getElementById('photo-input').click()" id="photo-btn">
+        &#128247; Add Photo
+      </button>
+      <button type="button" class="btn btn--primary log-submit-btn" id="log-btn" onclick="submitLog()">
+        Log It
+      </button>
+    </div>
+
+    <!-- Chat Q&A area -->
+    <div id="chat-area" style="display:none">
+      <div id="chat-messages" class="chat-messages"></div>
+      <div id="chat-input-area" class="chat-input-row" style="display:none">
+        <input type="text" id="chat-input" placeholder="Type your answer..." class="chat-input" autocomplete="off">
+        <button type="button" class="btn btn--primary" onclick="submitAnswer()">Send</button>
+      </div>
+    </div>
+  </div>
+  {{else}}
+  <div class="alert alert--error">AI logging unavailable. Please check your Ollama server.</div>
+  {{end}}
+
+  <!-- Entry list -->
+  <div id="entry-list">
+    {{range .Entries}}
+      {{template "log-entry-row" .}}
+    {{end}}
+  </div>
+</div>
+
+{{if .AIAvailable}}
+<script>
+(function() {
+  var currentSessionId = null;
+  var selectedFile = null;
+
+  // Wire up file input
+  document.getElementById('photo-input').addEventListener('change', function(e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    selectedFile = file;
+    showPreview(file);
+  });
+
+  function showPreview(file) {
+    var reader = new FileReader();
+    reader.onload = function(ev) {
+      document.getElementById('image-preview').src = ev.target.result;
+      document.getElementById('image-preview-area').style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  window.clearPhoto = function() {
+    selectedFile = null;
+    document.getElementById('photo-input').value = '';
+    document.getElementById('image-preview-area').style.display = 'none';
+    document.getElementById('image-preview').src = '';
+  };
+
+  function showError(msg) {
+    var el = document.getElementById('ai-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function hideError() {
+    document.getElementById('ai-error').style.display = 'none';
+  }
+
+  function setBusy(busy) {
+    document.getElementById('log-btn').disabled = busy;
+    document.getElementById('photo-btn').disabled = busy;
+    var sendBtn = document.querySelector('#chat-input-area .btn');
+    if (sendBtn) sendBtn.disabled = busy;
+  }
+
+  function addAIMessage(text) {
+    var messages = document.getElementById('chat-messages');
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble--ai';
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+    document.getElementById('chat-area').style.display = 'block';
+    bubble.scrollIntoView({behavior: 'smooth'});
+  }
+
+  function addUserMessage(text) {
+    var messages = document.getElementById('chat-messages');
+    var bubble = document.createElement('div');
+    bubble.className = 'chat-bubble chat-bubble--user';
+    bubble.textContent = text;
+    messages.appendChild(bubble);
+  }
+
+  function addEntryToList(entry) {
+    var list = document.getElementById('entry-list');
+    var loggedAt = entry.LoggedAt ? new Date(entry.LoggedAt) : new Date();
+    var timeStr = loggedAt.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    var id = entry.ID;
+    var html = '<div class="log-entry" id="entry-' + id + '">' +
+      '<div class="entry-top">' +
+        '<div class="entry-info">' +
+          '<span class="entry-name">' + escHtml(entry.FoodName) + '</span>' +
+          '<span class="entry-time">' + escHtml(timeStr) + '</span>' +
+        '</div>' +
+        '<div class="entry-macros">' +
+          '<span class="macro cal">' + entry.Calories + ' cal</span>' +
+          '<span class="macro pro">P: ' + Math.round(entry.ProteinG) + 'g</span>' +
+          '<span class="macro fat">F: ' + Math.round(entry.FatG) + 'g</span>' +
+          '<span class="macro carb">C: ' + Math.round(entry.CarbsG) + 'g</span>' +
+        '</div>' +
+        '<div class="entry-actions">' +
+          '<button class="btn btn--secondary btn--sm" onclick="toggleEdit(' + id + ')" title="Edit">&#x270E;</button>' +
+          '<button class="btn btn--danger btn--sm"' +
+            ' hx-delete="/api/log/' + id + '"' +
+            ' hx-target="#entry-' + id + '"' +
+            ' hx-swap="outerHTML"' +
+            ' hx-confirm="Remove this entry?">\u00D7</button>' +
+        '</div>' +
+      '</div>' +
+      '<div id="edit-' + id + '" class="edit-form" style="display:none">' +
+        '<textarea id="edit-text-' + id + '" class="edit-textarea"' +
+          ' placeholder="Describe the correction..."></textarea>' +
+        '<div id="edit-error-' + id + '" class="edit-error" style="display:none"></div>' +
+        '<div class="edit-actions">' +
+          '<button class="btn btn--primary btn--sm" onclick="submitEdit(' + id + ')">Update</button>' +
+          '<button class="btn btn--secondary btn--sm" onclick="toggleEdit(' + id + ')">Cancel</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    list.insertAdjacentHTML('afterbegin', html);
+    if (typeof htmx !== 'undefined') {
+      htmx.process(list.firstElementChild);
+    }
+  }
+
+  function resetLogUI() {
+    document.getElementById('description-input').value = '';
+    clearPhoto();
+    document.getElementById('chat-area').style.display = 'none';
+    document.getElementById('chat-messages').innerHTML = '';
+    document.getElementById('chat-input-area').style.display = 'none';
+    currentSessionId = null;
+    hideError();
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function resizeImage(file, maxPx, quality, cb) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      URL.revokeObjectURL(url);
+      var w = img.width, h = img.height;
+      if (w > maxPx || h > maxPx) {
+        var scale = maxPx / Math.max(w, h);
+        w = Math.round(w * scale);
+        h = Math.round(h * scale);
+      }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(function(blob) { cb(blob || file); }, 'image/jpeg', quality);
+    };
+    img.onerror = function() { cb(file); };
+    img.src = url;
+  }
+
+  window.submitLog = function() {
+    var description = document.getElementById('description-input').value.trim();
+    if (!description && !selectedFile) {
+      showError('Please describe what you are eating or take a photo.');
+      return;
+    }
+    hideError();
+    setBusy(true);
+    addAIMessage('Analyzing...');
+
+    function doSubmit(photoBlob) {
+      var formData = new FormData();
+      if (description) formData.append('description', description);
+      if (photoBlob) formData.append('photo', photoBlob, 'photo.jpg');
+      formData.append('date', '{{.ViewDateStr}}');
+
+      fetch('/api/log/photo', {method: 'POST', body: formData})
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+          setBusy(false);
+          var msgs = document.getElementById('chat-messages');
+          if (msgs.lastChild) msgs.removeChild(msgs.lastChild); // remove "Analyzing..."
+          if (data.error) { showError(data.error); return; }
+          currentSessionId = data.data.session_id;
+          addAIMessage(data.data.message);
+          if (data.data.done) {
+            if (data.data.entry) { addEntryToList(data.data.entry); }
+            resetLogUI();
+          } else {
+            document.getElementById('chat-input-area').style.display = 'flex';
+            document.getElementById('chat-input').focus();
+          }
+        })
+        .catch(function(err) {
+          setBusy(false);
+          showError('Error: ' + err.message);
+        });
+    }
+
+    if (selectedFile) {
+      resizeImage(selectedFile, 1024, 0.85, doSubmit);
+    } else {
+      doSubmit(null);
+    }
+  };
+
+  window.submitAnswer = function() {
+    var input = document.getElementById('chat-input');
+    var answer = input.value.trim();
+    if (!answer || !currentSessionId) return;
+    input.value = '';
+    addUserMessage(answer);
+    document.getElementById('chat-input-area').style.display = 'none';
+    setBusy(true);
+
+    fetch('/api/log/chat', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({session_id: currentSessionId, answer: answer})
+    })
+      .then(function(res) { return res.json(); })
+      .then(function(data) {
+        setBusy(false);
+        if (data.error) { showError(data.error); return; }
+        addAIMessage(data.data.message);
+        if (data.data.done) {
+          if (data.data.entry) { addEntryToList(data.data.entry); }
+          resetLogUI();
+        } else {
+          document.getElementById('chat-input-area').style.display = 'flex';
+          document.getElementById('chat-input').focus();
+        }
+      })
+      .catch(function(err) {
+        setBusy(false);
+        showError('Error: ' + err.message);
+      });
+  };
+
+  document.getElementById('chat-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { window.submitAnswer(); }
+  });
+
+  // --- Edit entry ---
+  window.toggleEdit = function(id) {
+    var form = document.getElementById('edit-' + id);
+    if (!form) return;
+    var isHidden = form.style.display === 'none';
+    form.style.display = isHidden ? 'block' : 'none';
+    if (isHidden) {
+      var ta = document.getElementById('edit-text-' + id);
+      if (ta) ta.focus();
+    }
+  };
+
+  window.submitEdit = function(id) {
+    var ta = document.getElementById('edit-text-' + id);
+    var errEl = document.getElementById('edit-error-' + id);
+    if (!ta) return;
+    var message = ta.value.trim();
+    if (!message) return;
+    errEl.style.display = 'none';
+
+    var btns = document.querySelectorAll('#edit-' + id + ' .btn');
+    btns.forEach(function(b) { b.disabled = true; });
+
+    fetch('/api/log/' + id + '/edit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: message})
+    })
+      .then(function(res) {
+        if (!res.ok) {
+          return res.json().then(function(d) { throw new Error(d.error || 'Edit failed'); });
+        }
+        return res.text();
+      })
+      .then(function(html) {
+        var el = document.getElementById('entry-' + id);
+        if (el) {
+          el.outerHTML = html;
+          var newEl = document.getElementById('entry-' + id);
+          if (newEl && typeof htmx !== 'undefined') htmx.process(newEl);
+        }
+      })
+      .catch(function(err) {
+        btns.forEach(function(b) { b.disabled = false; });
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      });
+  };
+})();
+</script>
+{{end}}
+{{end}}

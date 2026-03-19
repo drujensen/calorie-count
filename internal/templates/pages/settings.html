@@ -1,0 +1,90 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page">
+  <h2>Settings</h2>
+  {{if .Error}}<div class="alert alert--error">{{.Error}}</div>{{end}}
+  {{if .Success}}<div class="alert alert--success">Saved!</div>{{end}}
+
+  <div class="settings-card">
+    <h3>Goals &amp; Profile</h3>
+    <form method="POST" action="/settings">
+      <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+      <div class="form-group">
+        <label for="activity_level">Activity Level</label>
+        <div class="input-hint">How active are you on a typical day?</div>
+        <select id="activity_level" name="activity_level">
+          <option value="sedentary" {{if eq .User.ActivityLevel "sedentary"}}selected{{end}}>Not Active (desk job, little exercise)</option>
+          <option value="light" {{if eq .User.ActivityLevel "light"}}selected{{end}}>Somewhat Active (light exercise 1–3 days/week)</option>
+          <option value="moderate" {{if eq .User.ActivityLevel "moderate"}}selected{{end}}>Highly Active (moderate exercise 3–5 days/week)</option>
+          <option value="very" {{if eq .User.ActivityLevel "very"}}selected{{end}}>Very Active (hard exercise 6–7 days/week)</option>
+          <option value="extra" {{if eq .User.ActivityLevel "extra"}}selected{{end}}>Extremely Active (physical job or twice daily training)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="weight_loss_rate">Weekly Goal</label>
+        <div class="input-hint">Determines your daily calorie target</div>
+        <select id="weight_loss_rate" name="weight_loss_rate">
+          <option value="maintain" {{if eq .User.WeightLossRate "maintain"}}selected{{end}}>Maintain Weight</option>
+          <option value="lose_1" {{if eq .User.WeightLossRate "lose_1"}}selected{{end}}>Lose 1 pound per week</option>
+          <option value="lose_2" {{if eq .User.WeightLossRate "lose_2"}}selected{{end}}>Lose 2 pounds per week</option>
+        </select>
+        {{if gt .User.CalorieGoal 0}}
+        <div class="input-hint">Daily calorie target: <strong>{{.User.CalorieGoal}} kcal</strong></div>
+        {{end}}
+      </div>
+      <div class="form-group">
+        <label for="current_weight_lbs">Current Weight (lbs)</label>
+        <div class="input-hint">Used for calorie impact estimates</div>
+        <input type="number" id="current_weight_lbs" name="current_weight_lbs"
+               value="{{.User.CurrentWeightLbs}}" min="0" max="1500" step="0.1">
+      </div>
+      <div class="form-group">
+        <label for="target_weight_lbs">Target Weight (lbs)</label>
+        <div class="input-hint">Your goal weight for projections</div>
+        <input type="number" id="target_weight_lbs" name="target_weight_lbs"
+               value="{{if gt .User.TargetWeightLbs 0.0}}{{printf "%.1f" .User.TargetWeightLbs}}{{end}}"
+               min="0" max="1500" step="0.1">
+      </div>
+      <div class="form-group">
+        <label for="age">Age</label>
+        <input type="number" id="age" name="age"
+               value="{{.User.Age}}" min="0" max="120">
+      </div>
+      <div class="form-group">
+        <label>Height</label>
+        <div class="height-row">
+          <div class="height-field">
+            <input type="number" id="height_ft" name="height_ft"
+                   value="{{heightFt .User.HeightIn}}" min="0" max="9" placeholder="ft">
+            <span class="height-unit">ft</span>
+          </div>
+          <div class="height-field">
+            <input type="number" id="height_in" name="height_in"
+                   value="{{heightInRem .User.HeightIn}}" min="0" max="11" step="0.5" placeholder="in">
+            <span class="height-unit">in</span>
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label for="sex">Biological Sex</label>
+        <div class="input-hint">Used for BMI reference ranges</div>
+        <select id="sex" name="sex">
+          <option value="" {{if eq .User.Sex ""}}selected{{end}}>Prefer not to say</option>
+          <option value="male" {{if eq .User.Sex "male"}}selected{{end}}>Male</option>
+          <option value="female" {{if eq .User.Sex "female"}}selected{{end}}>Female</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn--primary">Save Changes</button>
+    </form>
+  </div>
+
+  <div class="settings-card">
+    <h3>Account</h3>
+    <p class="account-email">{{.User.Email}}</p>
+    <form method="POST" action="/logout">
+      <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+      <button type="submit" class="btn btn--outline">Sign Out</button>
+    </form>
+  </div>
+</div>
+{{end}}

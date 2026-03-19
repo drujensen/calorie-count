@@ -1,0 +1,111 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page">
+  <div class="period-toggle">
+    <a href="/?period=daily" class="btn {{if eq .Summary.Period "daily"}}btn--primary{{else}}btn--outline{{end}}">Today</a>
+    <a href="/?period=weekly" class="btn {{if eq .Summary.Period "weekly"}}btn--primary{{else}}btn--outline{{end}}">7 Days</a>
+    <a href="/?period=monthly" class="btn {{if eq .Summary.Period "monthly"}}btn--primary{{else}}btn--outline{{end}}">30 Days</a>
+  </div>
+
+  {{if .Error}}
+  <div class="alert alert--error">{{.Error}}</div>
+  {{end}}
+
+  <div class="results-card">
+    <h3>Calories</h3>
+    <div class="calorie-row">
+      <span class="calorie-consumed">{{.Summary.TotalCalories}}</span>
+      <span class="calorie-sep"> / </span>
+      <span class="calorie-goal">{{.Summary.CalorieGoal}}</span>
+      <span class="calorie-unit"> kcal</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill {{if gt .Summary.TotalCalories .Summary.CalorieGoal}}progress-over{{end}}"
+           style="width: {{.CaloriePct}}%"></div>
+    </div>
+    <div class="progress-labels">
+      <span>0</span>
+      <span>Goal: {{.Summary.CalorieGoal}}</span>
+    </div>
+  </div>
+
+  <div class="results-card">
+    <h3>Macros</h3>
+    <div class="macro-row">
+      <div class="macro-bar-item">
+        <div class="macro-label">Protein</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-protein" style="width: {{printf "%.0f" .Summary.ProteinPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalProteinG}}g &middot; {{printf "%.0f" .Summary.ProteinPct}}%</div>
+      </div>
+      <div class="macro-bar-item">
+        <div class="macro-label">Fat</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-fat" style="width: {{printf "%.0f" .Summary.FatPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalFatG}}g &middot; {{printf "%.0f" .Summary.FatPct}}%</div>
+      </div>
+      <div class="macro-bar-item">
+        <div class="macro-label">Carbs</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-carbs" style="width: {{printf "%.0f" .Summary.CarbsPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalCarbsG}}g &middot; {{printf "%.0f" .Summary.CarbsPct}}%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-card">
+    <h3>Weight Impact</h3>
+    <p class="weight-impact {{if gt .Summary.WeightImpactLbs 0.0}}weight-gain{{else if lt .Summary.WeightImpactLbs 0.0}}weight-loss{{end}}">
+      {{if gt .Summary.WeightImpactLbs 0.0}}+{{end}}{{printf "%.1f" .Summary.WeightImpactLbs}} lbs
+    </p>
+    <p class="weight-note">
+      {{if eq .Summary.Period "daily"}}at today's pace for a week{{else if eq .Summary.Period "weekly"}}projected for this week{{else}}projected for this month{{end}}
+    </p>
+    {{if ne .User.CurrentWeightLbs 0.0}}
+    <p class="current-weight">Current weight: {{printf "%.1f" .User.CurrentWeightLbs}} lbs</p>
+    {{end}}
+  </div>
+
+  {{if .HasBMRData}}
+  <div class="results-card">
+    <h3>Burn Rate</h3>
+    <div class="burn-rate-grid">
+      <div class="burn-rate-item">
+        <div class="burn-rate-label">BMR</div>
+        <div class="burn-rate-value">{{.GoalData.BMR}} kcal</div>
+        <div class="burn-rate-hint">calories burned at rest</div>
+      </div>
+      <div class="burn-rate-item">
+        <div class="burn-rate-label">TDEE</div>
+        <div class="burn-rate-value">{{.GoalData.TDEE}} kcal</div>
+        <div class="burn-rate-hint">estimated daily burn</div>
+      </div>
+      <div class="burn-rate-item">
+        <div class="burn-rate-label">Daily {{if gt .GoalData.DailyDeficit 0}}Deficit{{else}}Surplus{{end}}</div>
+        <div class="burn-rate-value {{if gt .GoalData.DailyDeficit 0}}deficit-positive{{else}}deficit-negative{{end}}">
+          {{if gt .GoalData.DailyDeficit 0}}&minus;{{.GoalData.DailyDeficit}}{{else}}+{{absInt .GoalData.DailyDeficit}}{{end}} kcal
+        </div>
+        <div class="burn-rate-hint">vs. your calorie goal</div>
+      </div>
+      <div class="burn-rate-item">
+        <div class="burn-rate-label">Weekly Change</div>
+        <div class="burn-rate-value {{if gt .GoalData.WeeklyLossLbs 0.0}}deficit-positive{{else}}deficit-negative{{end}}">
+          {{if gt .GoalData.WeeklyLossLbs 0.0}}&minus;{{printf "%.1f" .GoalData.WeeklyLossLbs}}{{else}}+{{printf "%.1f" (absFloat .GoalData.WeeklyLossLbs)}}{{end}} lbs/week
+        </div>
+        <div class="burn-rate-hint">projected at current goal</div>
+      </div>
+    </div>
+  </div>
+  {{end}}
+
+  {{if eq .Summary.TotalCalories 0}}
+  <div class="empty-state">
+    <p>No entries yet for this period.</p>
+    <a href="/log" class="btn btn--primary">Log your first meal &rarr;</a>
+  </div>
+  {{end}}
+</div>
+{{end}}

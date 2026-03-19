@@ -1,0 +1,38 @@
+{{define "base"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calorie Count</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <script src="https://unpkg.com/htmx.org@1.9.6" integrity="sha384-FhXw7b6AlE/jyjlZH5iHa/tTe9EpJ1Y55RjcgPbjeWMskSxZt1v9qkxLJWNJaGni" crossorigin="anonymous"></script>
+</head>
+<body>
+    <nav class="nav">
+        {{if .User}}
+        <div class="nav-tabs">
+            <a href="/" class="nav-tab {{if eq .ActiveTab "overview"}}nav-tab--active{{end}}">Overview</a>
+            <a href="/log" class="nav-tab {{if eq .ActiveTab "log"}}nav-tab--active{{end}}">Log</a>
+            <a href="/goal" class="nav-tab {{if eq .ActiveTab "goal"}}nav-tab--active{{end}}">Goal</a>
+        </div>
+        <div class="nav-actions">
+            <a href="/settings" class="nav-settings">Settings</a>
+            <form method="POST" action="/logout" style="display:inline">
+                <input type="hidden" name="_csrf" value="{{.CSRFToken}}">
+                <button type="submit" class="btn-logout">Logout</button>
+            </form>
+        </div>
+        {{else}}
+        <div class="nav-tabs"></div>
+        <div class="nav-actions">
+            <a href="/login" class="nav-settings">Login</a>
+            <a href="/register" class="nav-settings">Register</a>
+        </div>
+        {{end}}
+    </nav>
+    <main class="container">
+        {{template "content" .}}
+    </main>
+</body>
+</html>
+{{end}}

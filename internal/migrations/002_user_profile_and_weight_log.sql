@@ -1,0 +1,12 @@
+ALTER TABLE users ADD COLUMN age INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN height_in REAL NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN sex TEXT NOT NULL DEFAULT '';
+
+CREATE TABLE IF NOT EXISTS weight_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    weight_lbs REAL NOT NULL,
+    logged_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_weight_entries_user ON weight_entries(user_id, logged_at);

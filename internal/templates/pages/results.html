@@ -1,0 +1,261 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page">
+  <div class="period-toggle">
+    <a href="/results?period=daily" class="btn {{if eq .Summary.Period "daily"}}btn--primary{{else}}btn--outline{{end}}">Today</a>
+    <a href="/results?period=weekly" class="btn {{if eq .Summary.Period "weekly"}}btn--primary{{else}}btn--outline{{end}}">7 Days</a>
+    <a href="/results?period=monthly" class="btn {{if eq .Summary.Period "monthly"}}btn--primary{{else}}btn--outline{{end}}">30 Days</a>
+  </div>
+
+  {{if .Error}}
+  <div class="alert alert--error">{{.Error}}</div>
+  {{end}}
+
+  <div class="results-card">
+    <h3>Calories</h3>
+    <div class="calorie-row">
+      <span class="calorie-consumed">{{.Summary.TotalCalories}}</span>
+      <span class="calorie-sep"> / </span>
+      <span class="calorie-goal">{{.Summary.CalorieGoal}}</span>
+      <span class="calorie-unit"> kcal</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill {{if gt .Summary.TotalCalories .Summary.CalorieGoal}}progress-over{{end}}"
+           style="width: {{.CaloriePct}}%"></div>
+    </div>
+    <div class="progress-labels">
+      <span>0</span>
+      <span>Goal: {{.Summary.CalorieGoal}}</span>
+    </div>
+  </div>
+
+  <div class="results-card">
+    <h3>Macros</h3>
+    <div class="macro-row">
+      <div class="macro-bar-item">
+        <div class="macro-label">Protein</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-protein" style="width: {{printf "%.0f" .Summary.ProteinPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalProteinG}}g &middot; {{printf "%.0f" .Summary.ProteinPct}}%</div>
+      </div>
+      <div class="macro-bar-item">
+        <div class="macro-label">Fat</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-fat" style="width: {{printf "%.0f" .Summary.FatPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalFatG}}g &middot; {{printf "%.0f" .Summary.FatPct}}%</div>
+      </div>
+      <div class="macro-bar-item">
+        <div class="macro-label">Carbs</div>
+        <div class="macro-bar-track">
+          <div class="macro-bar-fill macro-carbs" style="width: {{printf "%.0f" .Summary.CarbsPct}}%"></div>
+        </div>
+        <div class="macro-value">{{printf "%.0f" .Summary.TotalCarbsG}}g &middot; {{printf "%.0f" .Summary.CarbsPct}}%</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="results-card">
+    <h3>Weight Impact</h3>
+    <p class="weight-impact {{if gt .Summary.WeightImpactLbs 0.0}}weight-gain{{else if lt .Summary.WeightImpactLbs 0.0}}weight-loss{{end}}">
+      {{if gt .Summary.WeightImpactLbs 0.0}}+{{end}}{{printf "%.1f" .Summary.WeightImpactLbs}} lbs
+    </p>
+    <p class="weight-note">
+      {{if eq .Summary.Period "daily"}}at today's pace for a week{{else if eq .Summary.Period "weekly"}}projected for this week{{else}}projected for this month{{end}}
+    </p>
+    {{if ne .User.CurrentWeightLbs 0.0}}
+    <p class="current-weight">Current weight: {{printf "%.1f" .User.CurrentWeightLbs}} lbs</p>
+    {{end}}
+  </div>
+
+  <!-- BMI Section -->
+  <div class="results-card">
+    <h3>Body Mass Index (BMI)</h3>
+
+    {{if eq .User.HeightIn 0.0}}
+    <p class="bmi-setup-hint">Set your height in <a href="/settings">Settings</a> to enable BMI tracking.</p>
+    {{else}}
+    <!-- Log Weight Form -->
+    <form class="weight-log-form" id="weight-log-form"
+          hx-post="/api/weight"
+          hx-target="#weight-log-feedback"
+          hx-swap="innerHTML"
+          hx-on::after-request="if(event.detail.successful) { setTimeout(function(){ window.location.reload(); }, 600); }">
+      <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+      <div class="weight-log-row">
+        <input type="number" name="weight_lbs" placeholder="Weight (lbs)"
+               min="50" max="1500" step="0.1" required class="weight-log-input">
+        <button type="submit" class="btn btn--primary btn--sm">Log Weight</button>
+      </div>
+    </form>
+    <div id="weight-log-feedback" class="weight-log-feedback"></div>
+
+    {{if .HasBMIData}}
+    <!-- Current BMI display -->
+    <div class="bmi-current">
+      <span class="bmi-value {{bmiClass .CurrentBMI}}">{{printf "%.1f" .CurrentBMI}}</span>
+      <span class="bmi-category {{bmiClass .CurrentBMI}}">{{.BMICategory}}</span>
+    </div>
+
+    <!-- BMI Chart -->
+    <div class="bmi-chart-wrap">
+      <canvas id="bmi-chart" class="bmi-chart"></canvas>
+    </div>
+
+    <!-- BMI Legend -->
+    <div class="bmi-legend">
+      <div class="bmi-legend-item"><span class="bmi-dot bmi-underweight"></span>Underweight &lt;18.5</div>
+      <div class="bmi-legend-item"><span class="bmi-dot bmi-normal"></span>Normal 18.5–24.9</div>
+      <div class="bmi-legend-item"><span class="bmi-dot bmi-overweight"></span>Overweight 25–29.9</div>
+      <div class="bmi-legend-item"><span class="bmi-dot bmi-obese"></span>Obese ≥30</div>
+    </div>
+    {{else}}
+    <p class="bmi-no-data">Log your weight above to start tracking BMI.</p>
+    {{end}}
+    {{end}}
+  </div>
+
+  {{if eq .Summary.TotalCalories 0}}
+  <div class="empty-state">
+    <p>No entries yet for this period.</p>
+    <a href="/" class="btn btn--primary">Log your first meal &rarr;</a>
+  </div>
+  {{end}}
+</div>
+
+{{if .HasBMIData}}
+<script>
+(function() {
+  var points = {{.BMIPoints}};
+  var canvas = document.getElementById('bmi-chart');
+  if (!canvas || !points || points.length === 0) return;
+
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.parentElement.clientWidth || 320;
+  var H = 200;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  var PAD = { top: 12, right: 16, bottom: 28, left: 36 };
+  var cw = W - PAD.left - PAD.right;
+  var ch = H - PAD.top - PAD.bottom;
+
+  // BMI zones (min y = 15, max y = 45 or highest+5)
+  var bmis = points.map(function(p){ return p.b; });
+  var minBMI = Math.min(14, Math.min.apply(null, bmis));
+  var maxBMI = Math.max(40, Math.max.apply(null, bmis) + 2);
+
+  function bmiY(b) { return PAD.top + ch - (b - minBMI) / (maxBMI - minBMI) * ch; }
+  function ptX(i) {
+    if (points.length === 1) return PAD.left + cw / 2;
+    return PAD.left + i / (points.length - 1) * cw;
+  }
+
+  // Draw zone bands
+  var zones = [
+    { lo: minBMI, hi: 18.5, color: '#bfdbfe' },  // underweight
+    { lo: 18.5,   hi: 25,   color: '#bbf7d0' },  // normal
+    { lo: 25,     hi: 30,   color: '#fed7aa' },  // overweight
+    { lo: 30,     hi: maxBMI, color: '#fecaca' } // obese
+  ];
+  zones.forEach(function(z) {
+    var y1 = bmiY(Math.min(z.hi, maxBMI));
+    var y2 = bmiY(Math.max(z.lo, minBMI));
+    ctx.fillStyle = z.color;
+    ctx.fillRect(PAD.left, y1, cw, y2 - y1);
+  });
+
+  // Zone boundary lines
+  [18.5, 25, 30].forEach(function(b) {
+    if (b > minBMI && b < maxBMI) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, bmiY(b));
+      ctx.lineTo(PAD.left + cw, bmiY(b));
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  });
+
+  // Y-axis labels
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  [Math.ceil(minBMI), 18.5, 25, 30, Math.floor(maxBMI)].forEach(function(b) {
+    if (b >= minBMI && b <= maxBMI) {
+      ctx.fillText(b, PAD.left - 4, bmiY(b) + 4);
+    }
+  });
+
+  // X-axis date labels (first + last)
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#6b7280';
+  if (points.length > 0) {
+    var d0 = new Date(points[0].t);
+    var d1 = new Date(points[points.length-1].t);
+    ctx.fillText(d0.toLocaleDateString([], {month:'short',day:'numeric'}), PAD.left, H - 6);
+    ctx.textAlign = 'right';
+    ctx.fillText(d1.toLocaleDateString([], {month:'short',day:'numeric'}), PAD.left + cw, H - 6);
+  }
+
+  // Draw line
+  ctx.strokeStyle = '#2563eb';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  points.forEach(function(p, i) {
+    var x = ptX(i), y = bmiY(p.b);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Draw dots
+  points.forEach(function(p, i) {
+    var x = ptX(i), y = bmiY(p.b);
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#2563eb';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Tooltip on hover/touch
+  var tooltip = document.createElement('div');
+  tooltip.className = 'bmi-tooltip';
+  tooltip.style.display = 'none';
+  canvas.parentElement.style.position = 'relative';
+  canvas.parentElement.appendChild(tooltip);
+
+  function showTooltip(e) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    if (points.length === 0) return;
+    var idx = Math.round((mx - PAD.left) / cw * (points.length - 1));
+    idx = Math.max(0, Math.min(points.length - 1, idx));
+    var p = points[idx];
+    var d = new Date(p.t);
+    tooltip.innerHTML = d.toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'}) +
+      '<br><b>BMI: ' + p.b.toFixed(1) + '</b><br>' + p.w.toFixed(1) + ' lbs';
+    var tx = ptX(idx) + PAD.left / 2;
+    tooltip.style.left = Math.min(tx, W - 120) + 'px';
+    tooltip.style.top = (bmiY(p.b) - 60) + 'px';
+    tooltip.style.display = 'block';
+  }
+
+  canvas.addEventListener('mousemove', showTooltip);
+  canvas.addEventListener('touchmove', function(e) { e.preventDefault(); showTooltip(e); }, {passive:false});
+  canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+  canvas.addEventListener('touchend', function() { tooltip.style.display = 'none'; });
+})();
+</script>
+{{end}}
+{{end}}

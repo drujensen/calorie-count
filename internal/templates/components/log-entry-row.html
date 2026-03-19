@@ -1,0 +1,34 @@
+{{define "log-entry-row"}}
+<div class="log-entry" id="entry-{{.ID}}">
+  <div class="entry-top">
+    <div class="entry-info">
+      <span class="entry-name">{{.FoodName}}</span>
+      <span class="entry-time">{{.LoggedAt.Format "3:04 PM"}}</span>
+    </div>
+    <div class="entry-macros">
+      <span class="macro cal">{{.Calories}} cal</span>
+      <span class="macro pro">P: {{printf "%.0f" .ProteinG}}g</span>
+      <span class="macro fat">F: {{printf "%.0f" .FatG}}g</span>
+      <span class="macro carb">C: {{printf "%.0f" .CarbsG}}g</span>
+    </div>
+    <div class="entry-actions">
+      <button class="btn btn--secondary btn--sm"
+              onclick="toggleEdit({{.ID}})" title="Edit">&#x270E;</button>
+      <button class="btn btn--danger btn--sm"
+        hx-delete="/api/log/{{.ID}}"
+        hx-target="#entry-{{.ID}}"
+        hx-swap="outerHTML"
+        hx-confirm="Remove this entry?">&#xD7;</button>
+    </div>
+  </div>
+  <div id="edit-{{.ID}}" class="edit-form" style="display:none">
+    <textarea id="edit-text-{{.ID}}" class="edit-textarea"
+              placeholder="Describe the correction, e.g. &ldquo;this is a cutie, not an orange — probably 40 calories&rdquo;"></textarea>
+    <div id="edit-error-{{.ID}}" class="edit-error" style="display:none"></div>
+    <div class="edit-actions">
+      <button class="btn btn--primary btn--sm" onclick="submitEdit({{.ID}})">Update</button>
+      <button class="btn btn--secondary btn--sm" onclick="toggleEdit({{.ID}})">Cancel</button>
+    </div>
+  </div>
+</div>
+{{end}}

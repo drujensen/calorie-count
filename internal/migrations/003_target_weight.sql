@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN target_weight_lbs REAL NOT NULL DEFAULT 0;

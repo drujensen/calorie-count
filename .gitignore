@@ -1,0 +1,41 @@
+# Go
+vendor/
+.go
+*.sum
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+
+# Logs
+logs/
+*.log
+
+# Build
+bin/
+dist/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+
+# Web
+web/node_modules/
+web/.next/
+web/.cache/
+web/build/
+
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+
+# AI Agent
+.aiagent/

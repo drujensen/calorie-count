@@ -1,0 +1,219 @@
+{{template "base" .}}
+{{define "content"}}
+<div class="page">
+  <h2>Weight Goal</h2>
+
+  {{if .Error}}<div class="alert alert--error">{{.Error}}</div>{{end}}
+
+  <!-- Log Weight Form -->
+  <div class="results-card">
+    <h3>Log Weight</h3>
+    <form class="weight-log-form" id="weight-log-form"
+          hx-post="/api/weight"
+          hx-target="#weight-log-feedback"
+          hx-swap="innerHTML"
+          hx-on::after-request="if(event.detail.successful) { setTimeout(function(){ window.location.reload(); }, 600); }">
+      <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
+      <div class="weight-log-row">
+        <input type="number" name="weight_lbs" placeholder="Weight (lbs)"
+               min="50" max="1500" step="0.1" required class="weight-log-input">
+        <button type="submit" class="btn btn--primary btn--sm">Log Weight</button>
+      </div>
+    </form>
+    <div id="weight-log-feedback" class="weight-log-feedback"></div>
+    {{if gt .GoalData.CurrentWeightLbs 0.0}}
+    <p class="current-weight">Current weight: {{printf "%.1f" .GoalData.CurrentWeightLbs}} lbs</p>
+    {{end}}
+  </div>
+
+  <!-- Target Weight & Projection -->
+  <div class="results-card">
+    <h3>Goal Projection</h3>
+    {{if not .GoalData.HasTarget}}
+    <p class="bmi-setup-hint">Set a <a href="/settings">target weight in Settings</a> to see your projected date.</p>
+    {{else}}
+    <div class="goal-projection">
+      <div class="goal-stat">
+        <div class="goal-stat-label">Target Weight</div>
+        <div class="goal-stat-value">{{printf "%.1f" .GoalData.TargetWeightLbs}} lbs</div>
+      </div>
+      {{if .GoalData.EstimatedDate}}
+      <div class="goal-stat">
+        <div class="goal-stat-label">Estimated Date</div>
+        <div class="goal-stat-value goal-date">{{.GoalData.EstimatedDate.Format "Jan 2, 2006"}}</div>
+      </div>
+      {{else}}
+      <div class="goal-stat">
+        <div class="goal-stat-label">Status</div>
+        <div class="goal-stat-value">{{if eq .GoalData.DailyDeficit 0}}Set a calorie deficit{{else if gt .GoalData.CurrentWeightLbs .GoalData.TargetWeightLbs}}Already at or below target{{else}}Already at or above target{{end}}</div>
+      </div>
+      {{end}}
+      {{if ne .GoalData.WeeklyLossLbs 0.0}}
+      <div class="goal-stat">
+        <div class="goal-stat-label">Weekly Change</div>
+        <div class="goal-stat-value">{{if gt .GoalData.WeeklyLossLbs 0.0}}&minus;{{printf "%.1f" .GoalData.WeeklyLossLbs}}{{else}}+{{printf "%.1f" (absFloat .GoalData.WeeklyLossLbs)}}{{end}} lbs/wk</div>
+      </div>
+      {{end}}
+    </div>
+    {{end}}
+    <p class="settings-link-hint"><a href="/settings">Edit target weight in Settings</a></p>
+  </div>
+
+  <!-- Weight Chart -->
+  {{if .HasWeightData}}
+  <div class="results-card">
+    <h3>Weight History</h3>
+    <div class="bmi-chart-wrap">
+      <canvas id="weight-chart" class="bmi-chart"></canvas>
+    </div>
+  </div>
+  {{end}}
+</div>
+
+{{if .HasWeightData}}
+<script>
+(function() {
+  var points = {{.WeightPoints}};
+  var targetW = {{.GoalData.TargetWeightLbs}};
+  var estMs = {{if .GoalData.EstimatedDate}}{{.GoalData.EstimatedDate.UnixMilli}}{{else}}0{{end}};
+
+  var canvas = document.getElementById('weight-chart');
+  if (!canvas || !points || points.length === 0) return;
+
+  var dpr = window.devicePixelRatio || 1;
+  var W = canvas.parentElement.clientWidth || 320;
+  var H = 220;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  var PAD = { top: 12, right: 16, bottom: 28, left: 52 };
+  var cw = W - PAD.left - PAD.right;
+  var ch = H - PAD.top - PAD.bottom;
+
+  // Determine weight range including target
+  var weights = points.map(function(p){ return p.w; });
+  if (targetW > 0) weights.push(targetW);
+  var minW = Math.floor(Math.min.apply(null, weights) - 5);
+  var maxW = Math.ceil(Math.max.apply(null, weights) + 5);
+
+  // Time range: extend right to estimated date if available
+  var minT = points[0].t;
+  var maxT = points[points.length - 1].t;
+  if (estMs > maxT) maxT = estMs + (maxT - minT) * 0.05;
+
+  function wY(w) { return PAD.top + ch - (w - minW) / (maxW - minW) * ch; }
+  function tX(t) {
+    if (maxT === minT) return PAD.left + cw / 2;
+    return PAD.left + (t - minT) / (maxT - minT) * cw;
+  }
+
+  // Target weight line
+  if (targetW > 0) {
+    ctx.strokeStyle = '#16a34a';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([6, 4]);
+    var ty = wY(targetW);
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, ty);
+    ctx.lineTo(PAD.left + cw, ty);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#16a34a';
+    ctx.font = '11px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText('Goal: ' + targetW.toFixed(1) + ' lbs', PAD.left + cw, ty - 3);
+  }
+
+  // Estimated date vertical line
+  if (estMs > 0 && estMs >= minT && estMs <= maxT) {
+    var ex = tX(estMs);
+    ctx.strokeStyle = '#f59e0b';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ex, PAD.top);
+    ctx.lineTo(ex, PAD.top + ch);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#f59e0b';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(new Date(estMs).toLocaleDateString([], {month:'short', day:'numeric'}), ex, PAD.top + 10);
+  }
+
+  // Y-axis labels
+  ctx.fillStyle = '#6b7280';
+  ctx.font = '11px -apple-system, sans-serif';
+  ctx.textAlign = 'right';
+  var step = Math.ceil((maxW - minW) / 5 / 5) * 5;
+  for (var w = Math.ceil(minW / step) * step; w <= maxW; w += step) {
+    ctx.fillText(w, PAD.left - 4, wY(w) + 4);
+  }
+
+  // X-axis labels (first + last)
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#6b7280';
+  var d0 = new Date(points[0].t);
+  var d1 = new Date(points[points.length-1].t);
+  ctx.fillText(d0.toLocaleDateString([], {month:'short', day:'numeric'}), PAD.left, H - 6);
+  ctx.textAlign = 'right';
+  ctx.fillText(d1.toLocaleDateString([], {month:'short', day:'numeric'}), PAD.left + cw, H - 6);
+
+  // Draw line
+  ctx.strokeStyle = '#2563eb';
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  points.forEach(function(p, i) {
+    var x = tX(p.t), y = wY(p.w);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Draw dots
+  points.forEach(function(p) {
+    var x = tX(p.t), y = wY(p.w);
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, 2 * Math.PI);
+    ctx.fillStyle = '#2563eb';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  });
+
+  // Tooltip
+  var tooltip = document.createElement('div');
+  tooltip.className = 'bmi-tooltip';
+  tooltip.style.display = 'none';
+  canvas.parentElement.style.position = 'relative';
+  canvas.parentElement.appendChild(tooltip);
+
+  canvas.addEventListener('mousemove', function(e) {
+    var rect = canvas.getBoundingClientRect();
+    var mx = e.clientX - rect.left;
+    if (points.length === 0) return;
+    // Find closest point by x
+    var bestIdx = 0, bestDist = Infinity;
+    points.forEach(function(p, i) {
+      var d = Math.abs(tX(p.t) - mx);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    });
+    var p = points[bestIdx];
+    var d = new Date(p.t);
+    tooltip.innerHTML = d.toLocaleDateString([], {month:'short',day:'numeric',year:'numeric'}) +
+      '<br><b>' + p.w.toFixed(1) + ' lbs</b>';
+    var tx = tX(p.t);
+    tooltip.style.left = Math.min(tx, W - 120) + 'px';
+    tooltip.style.top = (wY(p.w) - 55) + 'px';
+    tooltip.style.display = 'block';
+  });
+  canvas.addEventListener('mouseleave', function() { tooltip.style.display = 'none'; });
+})();
+</script>
+{{end}}
+{{end}}
