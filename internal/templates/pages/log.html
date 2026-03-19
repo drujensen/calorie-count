@@ -191,7 +191,7 @@
     var list = document.getElementById('entry-list');
     var utc = entry.LoggedAt || '';
     var id = entry.ID;
-    var html = '<div class="log-entry" id="entry-' + id + '">' +
+    var html = '<div class="log-entry" id="entry-' + id + '" data-calories="' + (entry.Calories || 0) + '" data-protein="' + Math.round(entry.ProteinG || 0) + '" data-fat="' + Math.round(entry.FatG || 0) + '" data-carbs="' + Math.round(entry.CarbsG || 0) + '">' +
       '<div class="entry-top">' +
         '<div class="entry-info">' +
           '<span class="entry-name">' + escHtml(entry.FoodName) + (entry.Amount > 0 && entry.Unit ? ' <span class="entry-serving">(' + entry.Amount + ' ' + escHtml(entry.Unit) + ')</span>' : '') + '</span>' +
@@ -347,6 +347,10 @@
       });
   };
 
+  document.getElementById('description-input').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); window.submitLog(); }
+  });
+
   document.getElementById('chat-input').addEventListener('keydown', function(e) {
     if (e.key === 'Enter') { window.submitAnswer(); }
   });
@@ -424,6 +428,25 @@
         errEl.style.display = 'block';
       });
   };
+  // Subtract deleted entry's macros from summary bar
+  document.body.addEventListener('htmx:beforeSwap', function(evt) {
+    var cfg = evt.detail.requestConfig;
+    if (!cfg || cfg.verb !== 'delete') { return; }
+    var target = evt.detail.target;
+    if (!target || !target.dataset.calories) { return; }
+    var calEl     = document.getElementById('summary-cal');
+    var proteinEl = document.getElementById('summary-protein');
+    var fatEl     = document.getElementById('summary-fat');
+    var carbEl    = document.getElementById('summary-carbs');
+    if (calEl) {
+      var parts = calEl.textContent.split(' / ');
+      var current = Math.max(0, (parseInt(parts[0]) || 0) - (parseFloat(target.dataset.calories) || 0));
+      calEl.textContent = current + ' / ' + (parts[1] || '');
+    }
+    if (proteinEl) { proteinEl.textContent = Math.max(0, (parseFloat(proteinEl.textContent) || 0) - (parseFloat(target.dataset.protein)  || 0)) + 'g'; }
+    if (fatEl)     { fatEl.textContent     = Math.max(0, (parseFloat(fatEl.textContent)     || 0) - (parseFloat(target.dataset.fat)      || 0)) + 'g'; }
+    if (carbEl)    { carbEl.textContent    = Math.max(0, (parseFloat(carbEl.textContent)    || 0) - (parseFloat(target.dataset.carbs)    || 0)) + 'g'; }
+  });
 })();
 </script>
 {{end}}

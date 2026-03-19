@@ -1,5 +1,5 @@
 {{define "log-entry-row"}}
-<div class="log-entry" id="entry-{{.ID}}">
+<div class="log-entry" id="entry-{{.ID}}" data-calories="{{.Calories}}" data-protein="{{printf "%.0f" .ProteinG}}" data-fat="{{printf "%.0f" .FatG}}" data-carbs="{{printf "%.0f" .CarbsG}}">
   <div class="entry-top">
     <div class="entry-info">
       <span class="entry-name">{{.FoodName}}{{if and (gt .Amount 0.0) (ne .Unit "")}} <span class="entry-serving">({{printf "%.4g" .Amount}} {{.Unit}})</span>{{end}}</span>
