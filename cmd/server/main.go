@@ -73,8 +73,8 @@ func main() {
 	srv := &http.Server{
 		Addr:         ":" + cfg.Port,
 		Handler:      httpHandler,
-		ReadTimeout:  5 * time.Second,
-		WriteTimeout: 10 * time.Second,
+		ReadTimeout:  60 * time.Second,  // allow time for image uploads
+		WriteTimeout: 310 * time.Second, // must exceed AI service timeout (300s)
 		IdleTimeout:  120 * time.Second,
 	}
 

@@ -16,19 +16,19 @@
   <!-- Summary Bar -->
   <div class="summary-bar">
     <div class="summary-bar__item">
-      <div class="summary-bar__value">{{.Summary.TotalCalories}} / {{.User.CalorieGoal}}</div>
+      <div class="summary-bar__value" id="summary-cal">{{.Summary.TotalCalories}} / {{.User.CalorieGoal}}</div>
       <div class="summary-bar__label">Calories</div>
     </div>
     <div class="summary-bar__item">
-      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalProteinG}}g</div>
+      <div class="summary-bar__value" id="summary-protein">{{printf "%.0f" .Summary.TotalProteinG}}g</div>
       <div class="summary-bar__label">Protein</div>
     </div>
     <div class="summary-bar__item">
-      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalFatG}}g</div>
+      <div class="summary-bar__value" id="summary-fat">{{printf "%.0f" .Summary.TotalFatG}}g</div>
       <div class="summary-bar__label">Fat</div>
     </div>
     <div class="summary-bar__item">
-      <div class="summary-bar__value">{{printf "%.0f" .Summary.TotalCarbsG}}g</div>
+      <div class="summary-bar__value" id="summary-carbs">{{printf "%.0f" .Summary.TotalCarbsG}}g</div>
       <div class="summary-bar__label">Carbs</div>
     </div>
   </div>
@@ -150,6 +150,30 @@
     messages.appendChild(bubble);
   }
 
+  function updateSummaryBar(entry) {
+    var calEl = document.getElementById('summary-cal');
+    var proEl = document.getElementById('summary-protein');
+    var fatEl = document.getElementById('summary-fat');
+    var carbEl = document.getElementById('summary-carbs');
+    if (calEl) {
+      var parts = calEl.textContent.split(' / ');
+      var current = parseInt(parts[0]) || 0;
+      calEl.textContent = (current + (entry.Calories || 0)) + ' / ' + (parts[1] || '');
+    }
+    if (proEl) {
+      var current = parseFloat(proEl.textContent) || 0;
+      proEl.textContent = Math.round(current + (entry.ProteinG || 0)) + 'g';
+    }
+    if (fatEl) {
+      var current = parseFloat(fatEl.textContent) || 0;
+      fatEl.textContent = Math.round(current + (entry.FatG || 0)) + 'g';
+    }
+    if (carbEl) {
+      var current = parseFloat(carbEl.textContent) || 0;
+      carbEl.textContent = Math.round(current + (entry.CarbsG || 0)) + 'g';
+    }
+  }
+
   function addEntryToList(entry) {
     var list = document.getElementById('entry-list');
     var loggedAt = entry.LoggedAt ? new Date(entry.LoggedAt) : new Date();
@@ -261,7 +285,7 @@
           currentSessionId = data.data.session_id;
           addAIMessage(data.data.message);
           if (data.data.done) {
-            if (data.data.entry) { addEntryToList(data.data.entry); }
+            if (data.data.entry) { addEntryToList(data.data.entry); updateSummaryBar(data.data.entry); }
             resetLogUI();
           } else {
             document.getElementById('chat-input-area').style.display = 'flex';

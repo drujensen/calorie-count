@@ -39,3 +39,5 @@ terraform.tfstate.backup
 
 # AI Agent
 .aiagent/
+
+calorie-count.db*

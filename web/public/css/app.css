@@ -1014,6 +1014,29 @@ textarea {
     h1 {
         font-size: 1.25rem;
     }
+
+    /* Stack macros below food name on mobile */
+    .entry-top {
+        flex-wrap: wrap;
+    }
+
+    .entry-info {
+        order: 1;
+        flex: 1;
+    }
+
+    .entry-actions {
+        order: 2;
+        flex-shrink: 0;
+    }
+
+    .entry-macros {
+        order: 3;
+        width: 100%;
+        margin-top: 0.375rem;
+        padding-top: 0.375rem;
+        border-top: 1px solid var(--color-border);
+    }
 }
 
 /* Burn rate grid */
