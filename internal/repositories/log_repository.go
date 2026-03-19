@@ -37,10 +37,10 @@ func (r *logRepository) Create(ctx context.Context, entry models.LogEntry) (mode
 		loggedAt = time.Now()
 	}
 	result, err := r.db.ExecContext(ctx,
-		`INSERT INTO log_entries (user_id, food_name, calories, protein_g, fat_g, carbs_g, image_path, notes, logged_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		`INSERT INTO log_entries (user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		entry.UserID, entry.FoodName, entry.Calories, entry.ProteinG, entry.FatG, entry.CarbsG,
-		entry.ImagePath, entry.Notes, loggedAt.UTC().Format(time.RFC3339),
+		entry.Amount, entry.Unit, entry.ImagePath, entry.Notes, loggedAt.UTC().Format(time.RFC3339),
 	)
 	if err != nil {
 		return models.LogEntry{}, fmt.Errorf("inserting log entry: %w", err)
@@ -59,13 +59,13 @@ func (r *logRepository) GetByID(ctx context.Context, id int, userID int) (models
 	var entry models.LogEntry
 	var loggedAt string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, image_path, notes, logged_at
+		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at
 		 FROM log_entries WHERE id = ? AND user_id = ?`,
 		id, userID,
 	).Scan(
 		&entry.ID, &entry.UserID, &entry.FoodName, &entry.Calories,
 		&entry.ProteinG, &entry.FatG, &entry.CarbsG,
-		&entry.ImagePath, &entry.Notes, &loggedAt,
+		&entry.Amount, &entry.Unit, &entry.ImagePath, &entry.Notes, &loggedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
 		return models.LogEntry{}, ErrNotFound
@@ -85,10 +85,10 @@ func (r *logRepository) GetByID(ctx context.Context, id int, userID int) (models
 func (r *logRepository) Update(ctx context.Context, entry models.LogEntry) (models.LogEntry, error) {
 	_, err := r.db.ExecContext(ctx,
 		`UPDATE log_entries
-		 SET food_name=?, calories=?, protein_g=?, fat_g=?, carbs_g=?, notes=?
+		 SET food_name=?, calories=?, protein_g=?, fat_g=?, carbs_g=?, amount=?, unit=?, notes=?
 		 WHERE id=? AND user_id=?`,
 		entry.FoodName, entry.Calories, entry.ProteinG, entry.FatG, entry.CarbsG,
-		entry.Notes, entry.ID, entry.UserID,
+		entry.Amount, entry.Unit, entry.Notes, entry.ID, entry.UserID,
 	)
 	if err != nil {
 		return models.LogEntry{}, fmt.Errorf("updating log entry: %w", err)
@@ -105,7 +105,7 @@ func (r *logRepository) ListByUserAndDate(ctx context.Context, userID int, date 
 	fromStr := from.UTC().Format(time.RFC3339)
 	toStr := to.UTC().Format(time.RFC3339)
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, image_path, notes, logged_at
+		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at
 		 FROM log_entries
 		 WHERE user_id = ? AND datetime(logged_at) >= datetime(?) AND datetime(logged_at) <= datetime(?)
 		 ORDER BY logged_at DESC`,
@@ -123,7 +123,7 @@ func (r *logRepository) ListByUserAndDate(ctx context.Context, userID int, date 
 		if err := rows.Scan(
 			&entry.ID, &entry.UserID, &entry.FoodName, &entry.Calories,
 			&entry.ProteinG, &entry.FatG, &entry.CarbsG,
-			&entry.ImagePath, &entry.Notes, &loggedAt,
+			&entry.Amount, &entry.Unit, &entry.ImagePath, &entry.Notes, &loggedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scanning log entry: %w", err)
 		}
@@ -186,13 +186,13 @@ func (r *logRepository) scanByID(ctx context.Context, id int) (models.LogEntry, 
 	var entry models.LogEntry
 	var loggedAt string
 	err := r.db.QueryRowContext(ctx,
-		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, image_path, notes, logged_at
+		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at
 		 FROM log_entries WHERE id = ?`,
 		id,
 	).Scan(
 		&entry.ID, &entry.UserID, &entry.FoodName, &entry.Calories,
 		&entry.ProteinG, &entry.FatG, &entry.CarbsG,
-		&entry.ImagePath, &entry.Notes, &loggedAt,
+		&entry.Amount, &entry.Unit, &entry.ImagePath, &entry.Notes, &loggedAt,
 	)
 	if err != nil {
 		return models.LogEntry{}, fmt.Errorf("querying log entry by id: %w", err)

@@ -74,11 +74,12 @@ type ollamaChatResponse struct {
 
 const systemPrompt = `You are a nutrition assistant helping track calorie intake. When shown a food photo, identify the food and estimate its nutritional content.
 
-If you need clarification about portion size, preparation method, or specific ingredients, ask ONE short friendly question at a time. Do not ask more than 2 clarifying questions total.
+If you need clarification about preparation method or specific ingredients, ask ONE short friendly question at a time. Do not ask more than 2 clarifying questions total. Always make a reasonable estimate for portion size rather than asking about it.
 
 When you have enough information, respond with ONLY a JSON object in this exact format (no other text):
-{"log":{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0}}
+{"log":{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving"}}
 
+The amount field is a number and unit is a string such as "cup", "oz", "g", "ml", "slice", "piece", "tbsp", "tsp", or "serving".
 Until you are ready to log, respond with only a plain conversational question or statement. Never mix JSON with other text.`
 
 // NewAIService creates an AIService and starts a background cleanup goroutine.
@@ -287,6 +288,8 @@ func parseLogJSON(content string, userID int) (*models.LogEntry, string, bool) {
 			ProteinG float64 `json:"protein_g"`
 			FatG     float64 `json:"fat_g"`
 			CarbsG   float64 `json:"carbs_g"`
+			Amount   float64 `json:"amount"`
+			Unit     string  `json:"unit"`
 		} `json:"log"`
 	}
 	// Find the first '{' to handle any accidental leading text.
@@ -307,6 +310,8 @@ func parseLogJSON(content string, userID int) (*models.LogEntry, string, bool) {
 		ProteinG: wrapper.Log.ProteinG,
 		FatG:     wrapper.Log.FatG,
 		CarbsG:   wrapper.Log.CarbsG,
+		Amount:   wrapper.Log.Amount,
+		Unit:     wrapper.Log.Unit,
 	}
 	msg := fmt.Sprintf("Got it! Logging %s (%d cal).", wrapper.Log.FoodName, wrapper.Log.Calories)
 	return entry, msg, true

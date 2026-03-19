@@ -61,6 +61,8 @@ type LogEntry struct {
 	ProteinG  float64
 	FatG      float64
 	CarbsG    float64
+	Amount    float64 // serving size quantity (e.g. 1.5)
+	Unit      string  // serving size unit (e.g. "cup", "oz", "g")
 	ImagePath string
 	Notes     string
 	LoggedAt  time.Time

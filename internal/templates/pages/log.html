@@ -153,12 +153,17 @@
   function addEntryToList(entry) {
     var list = document.getElementById('entry-list');
     var loggedAt = entry.LoggedAt ? new Date(entry.LoggedAt) : new Date();
-    var timeStr = loggedAt.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    var timeStr;
+    try {
+      timeStr = loggedAt.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+    } catch(e) {
+      timeStr = entry.LoggedAt ? entry.LoggedAt.substring(11, 16) : '';
+    }
     var id = entry.ID;
     var html = '<div class="log-entry" id="entry-' + id + '">' +
       '<div class="entry-top">' +
         '<div class="entry-info">' +
-          '<span class="entry-name">' + escHtml(entry.FoodName) + '</span>' +
+          '<span class="entry-name">' + escHtml(entry.FoodName) + (entry.Amount > 0 && entry.Unit ? ' <span class="entry-serving">(' + entry.Amount + ' ' + escHtml(entry.Unit) + ')</span>' : '') + '</span>' +
           '<span class="entry-time">' + escHtml(timeStr) + '</span>' +
         '</div>' +
         '<div class="entry-macros">' +

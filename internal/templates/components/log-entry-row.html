@@ -2,7 +2,7 @@
 <div class="log-entry" id="entry-{{.ID}}">
   <div class="entry-top">
     <div class="entry-info">
-      <span class="entry-name">{{.FoodName}}</span>
+      <span class="entry-name">{{.FoodName}}{{if and (gt .Amount 0.0) (ne .Unit "")}} <span class="entry-serving">({{printf "%.4g" .Amount}} {{.Unit}})</span>{{end}}</span>
       <span class="entry-time">{{.LoggedAt.Format "3:04 PM"}}</span>
     </div>
     <div class="entry-macros">

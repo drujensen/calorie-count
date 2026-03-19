@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS log_entries (
     protein_g REAL NOT NULL DEFAULT 0,
     fat_g REAL NOT NULL DEFAULT 0,
     carbs_g REAL NOT NULL DEFAULT 0,
+    amount REAL NOT NULL DEFAULT 0,
+    unit TEXT NOT NULL DEFAULT '',
     image_path TEXT NOT NULL DEFAULT '',
     notes TEXT NOT NULL DEFAULT '',
     logged_at DATETIME NOT NULL DEFAULT (datetime('now'))
