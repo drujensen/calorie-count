@@ -353,6 +353,7 @@
 
   // --- Clone entry ---
   window.cloneEntry = function(id) {
+    if (!confirm('Log this entry again?')) { return; }
     fetch('/api/log/' + id + '/clone', {method: 'POST'})
       .then(function(res) { return res.json(); })
       .then(function(data) {
