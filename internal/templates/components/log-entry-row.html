@@ -3,7 +3,7 @@
   <div class="entry-top">
     <div class="entry-info">
       <span class="entry-name">{{.FoodName}}{{if and (gt .Amount 0.0) (ne .Unit "")}} <span class="entry-serving">({{printf "%.4g" .Amount}} {{.Unit}})</span>{{end}}</span>
-      <span class="entry-time">{{.LoggedAt.Format "3:04 PM"}}</span>
+      <span class="entry-time" data-utc="{{.LoggedAt.UTC.Format "2006-01-02T15:04:05Z"}}"></span>
     </div>
     <div class="entry-macros">
       <span class="macro cal">{{.Calories}} cal</span>

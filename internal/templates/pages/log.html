@@ -91,6 +91,19 @@
   var currentSessionId = null;
   var selectedFile = null;
 
+  function formatEntryTimes() {
+    document.querySelectorAll('.entry-time[data-utc]').forEach(function(el) {
+      var d = new Date(el.getAttribute('data-utc'));
+      if (isNaN(d)) return;
+      try {
+        el.textContent = d.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
+      } catch(e) {
+        el.textContent = d.toTimeString().substring(0, 5);
+      }
+    });
+  }
+  formatEntryTimes();
+
   // Wire up file input
   document.getElementById('photo-input').addEventListener('change', function(e) {
     var file = e.target.files[0];
@@ -176,19 +189,13 @@
 
   function addEntryToList(entry) {
     var list = document.getElementById('entry-list');
-    var loggedAt = entry.LoggedAt ? new Date(entry.LoggedAt) : new Date();
-    var timeStr;
-    try {
-      timeStr = loggedAt.toLocaleTimeString([], {hour: 'numeric', minute: '2-digit'});
-    } catch(e) {
-      timeStr = entry.LoggedAt ? entry.LoggedAt.substring(11, 16) : '';
-    }
+    var utc = entry.LoggedAt || '';
     var id = entry.ID;
     var html = '<div class="log-entry" id="entry-' + id + '">' +
       '<div class="entry-top">' +
         '<div class="entry-info">' +
           '<span class="entry-name">' + escHtml(entry.FoodName) + (entry.Amount > 0 && entry.Unit ? ' <span class="entry-serving">(' + entry.Amount + ' ' + escHtml(entry.Unit) + ')</span>' : '') + '</span>' +
-          '<span class="entry-time">' + escHtml(timeStr) + '</span>' +
+          '<span class="entry-time" data-utc="' + escHtml(utc) + '"></span>' +
         '</div>' +
         '<div class="entry-macros">' +
           '<span class="macro cal">' + entry.Calories + ' cal</span>' +
@@ -216,6 +223,7 @@
       '</div>' +
     '</div>';
     list.insertAdjacentHTML('afterbegin', html);
+    formatEntryTimes();
     if (typeof htmx !== 'undefined') {
       htmx.process(list.firstElementChild);
     }
