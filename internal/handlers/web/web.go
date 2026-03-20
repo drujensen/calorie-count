@@ -587,15 +587,15 @@ func (h *WebHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
 }
 
-// clientLocation returns a *time.Location derived from the "tz" cookie set by
-// the browser. The cookie value is the browser's getTimezoneOffset() result —
-// minutes *behind* UTC (positive = west, e.g. PST = 480). Falls back to UTC.
+// clientLocation returns a *time.Location derived from the "tz" query param
+// set by the browser. The value is getTimezoneOffset() — minutes *behind* UTC
+// (positive = west of UTC, e.g. PST = 480). Falls back to UTC.
 func clientLocation(r *http.Request) *time.Location {
-	c, err := r.Cookie("tz")
-	if err != nil {
+	tzStr := r.URL.Query().Get("tz")
+	if tzStr == "" {
 		return time.UTC
 	}
-	offsetMin, err := strconv.Atoi(c.Value)
+	offsetMin, err := strconv.Atoi(tzStr)
 	if err != nil {
 		return time.UTC
 	}
