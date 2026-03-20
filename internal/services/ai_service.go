@@ -253,16 +253,33 @@ func (s *aiServiceImpl) GetResult(sessionID string) *models.LogEntry {
 // CorrectEntry sends a natural-language correction for an existing log entry
 // and returns the revised LogEntry from the AI.
 func (s *aiServiceImpl) CorrectEntry(ctx context.Context, original models.LogEntry, correction string) (*models.LogEntry, error) {
+	amountStr := ""
+	if original.Amount > 0 && original.Unit != "" {
+		amountStr = fmt.Sprintf(", %.4g %s", original.Amount, original.Unit)
+	}
 	userMsg := fmt.Sprintf(
-		`Previously logged: "%s" (%d cal, %.1fg protein, %.1fg fat, %.1fg carbs).
-User correction: %s
-Please provide corrected nutritional information.`,
-		original.FoodName, original.Calories, original.ProteinG, original.FatG, original.CarbsG,
+		`The user previously logged this food entry:
+- Food: %s%s
+- Calories: %d
+- Protein: %.1fg
+- Fat: %.1fg
+- Carbs: %.1fg
+
+The user wants to correct it with this note: %s
+
+Apply the correction and return the updated entry as JSON.`,
+		original.FoodName, amountStr,
+		original.Calories, original.ProteinG, original.FatG, original.CarbsG,
 		correction,
 	)
 
+	const correctPrompt = `You are a nutrition assistant. The user is correcting a previously logged food entry. Apply their correction and immediately return updated nutritional data as JSON. Do NOT ask clarifying questions — make your best estimate and return the JSON now.
+
+Respond with only this JSON, filling in the correct values:
+{"log": {"food_name": "string", "calories": integer, "protein_g": float, "fat_g": float, "carbs_g": float, "amount": float, "unit": "string"}}`
+
 	msgs := []ollamaMessage{
-		{Role: "system", Content: systemPrompt},
+		{Role: "system", Content: correctPrompt},
 		{Role: "user", Content: userMsg},
 	}
 

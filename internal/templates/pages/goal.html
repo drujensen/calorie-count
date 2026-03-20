@@ -20,9 +20,6 @@
       </div>
     </form>
     <div id="weight-log-feedback" class="weight-log-feedback"></div>
-    {{if gt .GoalData.CurrentWeightLbs 0.0}}
-    <p class="current-weight">Current weight: {{printf "%.1f" .GoalData.CurrentWeightLbs}} lbs</p>
-    {{end}}
   </div>
 
   <!-- Target Weight & Projection -->
@@ -32,10 +29,22 @@
     <p class="bmi-setup-hint">Set a <a href="/settings">target weight in Settings</a> to see your projected date.</p>
     {{else}}
     <div class="goal-projection">
+      {{if gt .GoalData.CurrentWeightLbs 0.0}}
+      <div class="goal-stat">
+        <div class="goal-stat-label">Current Weight</div>
+        <div class="goal-stat-value">{{printf "%.1f" .GoalData.CurrentWeightLbs}} lbs</div>
+      </div>
+      {{end}}
       <div class="goal-stat">
         <div class="goal-stat-label">Target Weight</div>
         <div class="goal-stat-value">{{printf "%.1f" .GoalData.TargetWeightLbs}} lbs</div>
       </div>
+      {{if ne .GoalData.WeeklyLossLbs 0.0}}
+      <div class="goal-stat">
+        <div class="goal-stat-label">Weekly Change</div>
+        <div class="goal-stat-value">{{if gt .GoalData.WeeklyLossLbs 0.0}}&minus;{{printf "%.1f" .GoalData.WeeklyLossLbs}}{{else}}+{{printf "%.1f" (absFloat .GoalData.WeeklyLossLbs)}}{{end}} lbs/wk</div>
+      </div>
+      {{end}}
       {{if .GoalData.EstimatedDate}}
       <div class="goal-stat">
         <div class="goal-stat-label">Estimated Date</div>
@@ -45,12 +54,6 @@
       <div class="goal-stat">
         <div class="goal-stat-label">Status</div>
         <div class="goal-stat-value">{{if eq .GoalData.DailyDeficit 0}}Set a calorie deficit{{else if gt .GoalData.CurrentWeightLbs .GoalData.TargetWeightLbs}}Already at or below target{{else}}Already at or above target{{end}}</div>
-      </div>
-      {{end}}
-      {{if ne .GoalData.WeeklyLossLbs 0.0}}
-      <div class="goal-stat">
-        <div class="goal-stat-label">Weekly Change</div>
-        <div class="goal-stat-value">{{if gt .GoalData.WeeklyLossLbs 0.0}}&minus;{{printf "%.1f" .GoalData.WeeklyLossLbs}}{{else}}+{{printf "%.1f" (absFloat .GoalData.WeeklyLossLbs)}}{{end}} lbs/wk</div>
       </div>
       {{end}}
     </div>
