@@ -87,6 +87,9 @@
 
 {{if .AIAvailable}}
 <script>
+// Keep the server informed of the browser's UTC offset so date boundaries
+// are computed in the user's local timezone, not the server's UTC clock.
+document.cookie = 'tz=' + new Date().getTimezoneOffset() + '; path=/; SameSite=Lax';
 (function() {
   var currentSessionId = null;
   var selectedFile = null;

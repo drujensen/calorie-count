@@ -176,11 +176,14 @@ func (h *WebHandler) Log(w http.ResponseWriter, r *http.Request) {
 	aiAvailable := h.aiSvc.IsAvailable(r.Context())
 
 	// Resolve the date to view. Default to today.
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+	// Use the client's timezone offset (minutes behind UTC) from the "tz" cookie so
+	// that day boundaries match the browser's local date, not the server's UTC clock.
+	loc := clientLocation(r)
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 	viewDate := today
 	if dateStr := r.URL.Query().Get("date"); dateStr != "" {
-		if parsed, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
+		if parsed, err := time.ParseInLocation("2006-01-02", dateStr, loc); err == nil {
 			viewDate = parsed
 		}
 	}
@@ -582,6 +585,23 @@ func (h *WebHandler) PostLogout(w http.ResponseWriter, r *http.Request) {
 func (h *WebHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
+}
+
+// clientLocation returns a *time.Location derived from the "tz" cookie set by
+// the browser. The cookie value is the browser's getTimezoneOffset() result —
+// minutes *behind* UTC (positive = west, e.g. PST = 480). Falls back to UTC.
+func clientLocation(r *http.Request) *time.Location {
+	c, err := r.Cookie("tz")
+	if err != nil {
+		return time.UTC
+	}
+	offsetMin, err := strconv.Atoi(c.Value)
+	if err != nil {
+		return time.UTC
+	}
+	// getTimezoneOffset() is positive for zones west of UTC, but time.FixedZone
+	// expects seconds east of UTC — so negate.
+	return time.FixedZone("client", -offsetMin*60)
 }
 
 func sessionCookie(token string, expires time.Time, secure bool) *http.Cookie {

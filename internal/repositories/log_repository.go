@@ -99,8 +99,8 @@ func (r *logRepository) Update(ctx context.Context, entry models.LogEntry) (mode
 // ListByUserAndDate returns all entries for a user on the given date, newest first.
 // Uses local-time day boundaries to correctly handle timezone offsets.
 func (r *logRepository) ListByUserAndDate(ctx context.Context, userID int, date time.Time) ([]models.LogEntry, error) {
-	d := date.In(time.Local)
-	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
+	d := date
+	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 	to := from.Add(24*time.Hour - time.Nanosecond)
 	fromStr := from.UTC().Format(time.RFC3339)
 	toStr := to.UTC().Format(time.RFC3339)
