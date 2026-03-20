@@ -22,7 +22,7 @@ type LogService interface {
 	DeleteEntry(ctx context.Context, userID int, entryID int) error
 	GetEntriesForDate(ctx context.Context, userID int, date time.Time) ([]models.LogEntry, error)
 	GetSummaryForDate(ctx context.Context, userID int, date time.Time) (models.MacroSummary, error)
-	GetSummary(ctx context.Context, userID int, period string) (models.PeriodSummary, error)
+	GetSummary(ctx context.Context, userID int, period string, now time.Time) (models.PeriodSummary, error)
 }
 
 type logService struct {
@@ -106,8 +106,8 @@ func (s *logService) GetEntriesForDate(ctx context.Context, userID int, date tim
 
 // GetSummaryForDate returns macro totals for the given date.
 func (s *logService) GetSummaryForDate(ctx context.Context, userID int, date time.Time) (models.MacroSummary, error) {
-	d := date.In(time.Local)
-	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, time.Local)
+	d := date
+	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
 	summary, err := s.logs.SumByPeriod(ctx, userID, from, to)
@@ -118,9 +118,9 @@ func (s *logService) GetSummaryForDate(ctx context.Context, userID int, date tim
 }
 
 // GetSummary returns a PeriodSummary for "daily", "weekly", or "monthly".
-func (s *logService) GetSummary(ctx context.Context, userID int, period string) (models.PeriodSummary, error) {
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+// now must be in the caller's local timezone so day boundaries are correct.
+func (s *logService) GetSummary(ctx context.Context, userID int, period string, now time.Time) (models.PeriodSummary, error) {
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
 
 	var from, to time.Time
 	switch period {

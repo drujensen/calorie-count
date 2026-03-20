@@ -235,7 +235,8 @@ func (h *WebHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		period = "daily"
 	}
 
-	ps, err := h.logSvc.GetSummary(r.Context(), user.ID, period)
+	now := time.Now().In(clientLocation(r))
+	ps, err := h.logSvc.GetSummary(r.Context(), user.ID, period, now)
 	if err != nil {
 		h.render(w, "overview.html", OverviewPageData{
 			PageData: PageData{ActiveTab: "overview", User: &user, Error: "failed to load summary", CSRFToken: csrfToken},

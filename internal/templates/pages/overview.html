@@ -108,4 +108,19 @@
   </div>
   {{end}}
 </div>
+<script>
+(function() {
+  var tz = new Date().getTimezoneOffset();
+  // Append tz to period toggle links so the server uses the client's timezone.
+  document.querySelectorAll('a[href^="/?period="]').forEach(function(a) {
+    if (a.href.indexOf('tz=') === -1) { a.href += '&tz=' + tz; }
+  });
+  // If no tz in URL yet, reload with it so the current view is correct.
+  if (!new URLSearchParams(window.location.search).has('tz')) {
+    var params = new URLSearchParams(window.location.search);
+    params.set('tz', tz);
+    window.location.replace('/?' + params.toString());
+  }
+})();
+</script>
 {{end}}
