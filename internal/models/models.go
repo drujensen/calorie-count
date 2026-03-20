@@ -88,9 +88,10 @@ type MacroSummary struct {
 type PeriodSummary struct {
 	Period string // "daily", "weekly", "monthly"
 	MacroSummary
-	CalorieGoal     int
-	ProteinPct      float64 // protein_g * 4 / calories * 100
-	FatPct          float64 // fat_g * 9 / calories * 100
-	CarbsPct        float64 // carbs_g * 4 / calories * 100
-	WeightImpactLbs float64 // (avg_daily_calories - goal) * days / 3500
+	CalorieGoal      int
+	AvgDailyCalories int     // TotalCalories / Days (same as TotalCalories for daily)
+	ProteinPct       float64 // protein_g * 4 / calories * 100
+	FatPct           float64 // fat_g * 9 / calories * 100
+	CarbsPct         float64 // carbs_g * 4 / calories * 100
+	WeightImpactLbs  float64 // (avg_daily_calories - goal) * days / 3500
 }

@@ -550,6 +550,19 @@ textarea {
     font-size: 1rem;
 }
 
+.period-avg-label {
+    font-size: 0.8rem;
+    font-weight: normal;
+    color: var(--color-text-muted);
+}
+
+.period-total-note {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--color-text-muted);
+    text-align: right;
+}
+
 .calorie-goal {
     font-size: 1rem;
     color: var(--color-text-muted);

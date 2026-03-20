@@ -246,7 +246,7 @@ func (h *WebHandler) Overview(w http.ResponseWriter, r *http.Request) {
 
 	caloriePct := 0
 	if ps.CalorieGoal > 0 {
-		caloriePct = ps.TotalCalories * 100 / ps.CalorieGoal
+		caloriePct = ps.AvgDailyCalories * 100 / ps.CalorieGoal
 		if caloriePct > 150 {
 			caloriePct = 150
 		}

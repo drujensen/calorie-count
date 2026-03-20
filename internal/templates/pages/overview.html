@@ -12,21 +12,24 @@
   {{end}}
 
   <div class="results-card">
-    <h3>Calories</h3>
+    <h3>Calories{{if ne .Summary.Period "daily"}} <span class="period-avg-label">(daily avg)</span>{{end}}</h3>
     <div class="calorie-row">
-      <span class="calorie-consumed">{{.Summary.TotalCalories}}</span>
+      <span class="calorie-consumed">{{.Summary.AvgDailyCalories}}</span>
       <span class="calorie-sep"> / </span>
       <span class="calorie-goal">{{.Summary.CalorieGoal}}</span>
       <span class="calorie-unit"> kcal</span>
     </div>
     <div class="progress-bar">
-      <div class="progress-fill {{if gt .Summary.TotalCalories .Summary.CalorieGoal}}progress-over{{end}}"
+      <div class="progress-fill {{if gt .Summary.AvgDailyCalories .Summary.CalorieGoal}}progress-over{{end}}"
            style="width: {{.CaloriePct}}%"></div>
     </div>
     <div class="progress-labels">
       <span>0</span>
       <span>Goal: {{.Summary.CalorieGoal}}</span>
     </div>
+    {{if ne .Summary.Period "daily"}}
+    <p class="period-total-note">Total: {{.Summary.TotalCalories}} kcal over {{.Summary.Days}} day{{if gt .Summary.Days 1}}s{{end}}</p>
+    {{end}}
   </div>
 
   <div class="results-card">

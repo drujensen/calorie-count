@@ -146,10 +146,16 @@ func (s *logService) GetSummary(ctx context.Context, userID int, period string, 
 		return models.PeriodSummary{}, fmt.Errorf("getting user: %w", err)
 	}
 
+	avgDaily := macro.TotalCalories
+	if macro.Days > 1 {
+		avgDaily = macro.TotalCalories / macro.Days
+	}
+
 	ps := models.PeriodSummary{
-		Period:       period,
-		MacroSummary: macro,
-		CalorieGoal:  user.CalorieGoal,
+		Period:           period,
+		MacroSummary:     macro,
+		CalorieGoal:      user.CalorieGoal,
+		AvgDailyCalories: avgDaily,
 	}
 
 	if macro.TotalCalories > 0 {
