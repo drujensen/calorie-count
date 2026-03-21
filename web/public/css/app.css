@@ -568,6 +568,73 @@ textarea {
     color: var(--color-text-muted);
 }
 
+/* Three-zone calorie bar */
+.calorie-bar-wrap {
+    position: relative;
+    height: 20px;
+    margin: 0.75rem 0 1.5rem;
+}
+
+.calorie-bar-track {
+    position: absolute;
+    inset: 4px 0;
+    display: flex;
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+.calorie-bar-zone-green {
+    height: 100%;
+    background-color: #bbf7d0;
+}
+
+.calorie-bar-zone-yellow {
+    height: 100%;
+    background-color: #fef08a;
+    flex: 1;
+}
+
+.calorie-bar-fill {
+    position: absolute;
+    top: 4px;
+    left: 0;
+    height: calc(100% - 8px);
+    border-radius: 6px;
+    transition: width 0.3s ease;
+    opacity: 0.85;
+}
+
+.calorie-bar-fill--green  { background-color: #16a34a; }
+.calorie-bar-fill--yellow { background-color: #ca8a04; }
+.calorie-bar-fill--red    { background-color: #dc2626; }
+
+.calorie-bar-marker {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: rgba(0,0,0,0.25);
+    transform: translateX(-1px);
+}
+
+.calorie-bar-marker-label {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 0.68rem;
+    color: var(--color-text-muted);
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1.2;
+}
+
+.calorie-bar-marker--tdee .calorie-bar-marker-label {
+    left: auto;
+    right: 0;
+    transform: none;
+}
+
 /* Progress Bar */
 .progress-bar {
     width: 100%;

@@ -19,6 +19,21 @@
       <span class="calorie-goal">{{.Summary.CalorieGoal}}</span>
       <span class="calorie-unit"> kcal</span>
     </div>
+    {{if and .HasBMRData (gt .GoalData.TDEE 0)}}
+    <div class="calorie-bar-wrap">
+      <div class="calorie-bar-track">
+        <div class="calorie-bar-zone-green" style="width: {{.BarGoalPct}}%"></div>
+        <div class="calorie-bar-zone-yellow" style="width: {{sub 100 .BarGoalPct}}%"></div>
+      </div>
+      <div class="calorie-bar-fill calorie-bar-fill--{{.BarColor}}" style="width: {{.BarFillPct}}%"></div>
+      <div class="calorie-bar-marker calorie-bar-marker--goal" style="left: {{.BarGoalPct}}%">
+        <span class="calorie-bar-marker-label">Goal<br>{{.Summary.CalorieGoal}}</span>
+      </div>
+      <div class="calorie-bar-marker calorie-bar-marker--tdee" style="left: 100%">
+        <span class="calorie-bar-marker-label">TDEE<br>{{.GoalData.TDEE}}</span>
+      </div>
+    </div>
+    {{else}}
     <div class="progress-bar">
       <div class="progress-fill {{if gt .Summary.AvgDailyCalories .Summary.CalorieGoal}}progress-over{{end}}"
            style="width: {{.CaloriePct}}%"></div>
@@ -27,6 +42,7 @@
       <span>0</span>
       <span>Goal: {{.Summary.CalorieGoal}}</span>
     </div>
+    {{end}}
     {{if ne .Summary.Period "daily"}}
     <p class="period-total-note">Total: {{.Summary.TotalCalories}} kcal over {{.Summary.Days}} day{{if gt .Summary.Days 1}}s{{end}}</p>
     {{end}}

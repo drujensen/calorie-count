@@ -39,6 +39,7 @@ var tmplFuncs = template.FuncMap{
 	},
 	"absInt":   func(n int) int { if n < 0 { return -n }; return n },
 	"absFloat": func(f float64) float64 { if f < 0 { return -f }; return f },
+	"sub":      func(a, b int) int { return a - b },
 }
 
 // PageData holds common data passed to all page templates.
@@ -67,6 +68,10 @@ type OverviewPageData struct {
 	CaloriePct int
 	GoalData   models.GoalData
 	HasBMRData bool
+	// Three-zone bar (all as % of TDEE, capped at 120)
+	BarGoalPct int // where the goal marker sits (CalorieGoal / TDEE * 100)
+	BarFillPct int // actual fill width
+	BarColor   string // "green", "yellow", or "red"
 }
 
 // GoalPageData holds data for the goal page.
@@ -257,12 +262,34 @@ func (h *WebHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		slog.Error("getting goal data", "error", err)
 	}
 
+	// Three-zone bar: scale everything against TDEE.
+	// If TDEE is unknown, fall back to the old single-zone bar.
+	barGoalPct, barFillPct := 0, caloriePct
+	barColor := "green"
+	tdee := goalData.TDEE
+	if tdee > 0 && ps.CalorieGoal > 0 {
+		barGoalPct = ps.CalorieGoal * 100 / tdee
+		barFillPct = ps.AvgDailyCalories * 100 / tdee
+		if barFillPct > 120 {
+			barFillPct = 120
+		}
+		switch {
+		case ps.AvgDailyCalories > tdee:
+			barColor = "red"
+		case ps.AvgDailyCalories > ps.CalorieGoal:
+			barColor = "yellow"
+		}
+	}
+
 	h.render(w, "overview.html", OverviewPageData{
 		PageData:   PageData{ActiveTab: "overview", User: &user, CSRFToken: csrfToken},
 		Summary:    ps,
 		CaloriePct: caloriePct,
 		GoalData:   goalData,
 		HasBMRData: goalData.BMR > 0,
+		BarGoalPct: barGoalPct,
+		BarFillPct: barFillPct,
+		BarColor:   barColor,
 	})
 }
 
