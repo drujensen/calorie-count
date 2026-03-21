@@ -67,8 +67,8 @@
     <p class="weight-note">
       {{if eq .Summary.Period "daily"}}at today's pace for a week{{else if eq .Summary.Period "weekly"}}projected for this week{{else}}projected for this month{{end}}
     </p>
-    {{if ne .User.CurrentWeightLbs 0.0}}
-    <p class="current-weight">Current weight: {{printf "%.1f" .User.CurrentWeightLbs}} lbs</p>
+    {{if gt .GoalData.CurrentWeightLbs 0.0}}
+    <p class="current-weight">Current weight: {{printf "%.1f" .GoalData.CurrentWeightLbs}} lbs</p>
     {{end}}
   </div>
 
