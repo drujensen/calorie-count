@@ -80,6 +80,8 @@ When you have enough information, respond with ONLY a JSON object in this exact 
 {"log":{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving"}}
 
 The amount field is a number and unit is a string such as "cup", "oz", "g", "ml", "slice", "piece", "tbsp", "tsp", or "serving".
+
+IMPORTANT: Always provide realistic estimates for ALL of protein_g, fat_g, and carbs_g — never leave them at 0 unless the food truly has none of that macro. The calories should approximately equal (protein_g × 4) + (fat_g × 9) + (carbs_g × 4). Use standard nutrition references to guide your estimates.
 Until you are ready to log, respond with only a plain conversational question or statement. Never mix JSON with other text.`
 
 // NewAIService creates an AIService and starts a background cleanup goroutine.
@@ -274,6 +276,8 @@ Apply the correction and return the updated entry as JSON.`,
 	)
 
 	const correctPrompt = `You are a nutrition assistant. The user is correcting a previously logged food entry. Apply their correction and immediately return updated nutritional data as JSON. Do NOT ask clarifying questions — make your best estimate and return the JSON now.
+
+IMPORTANT: Always provide realistic estimates for ALL of protein_g, fat_g, and carbs_g — never leave them at 0 unless the food truly has none of that macro. The calories should approximately equal (protein_g × 4) + (fat_g × 9) + (carbs_g × 4).
 
 Respond with only this JSON, filling in the correct values:
 {"log": {"food_name": "string", "calories": integer, "protein_g": float, "fat_g": float, "carbs_g": float, "amount": float, "unit": "string"}}`
