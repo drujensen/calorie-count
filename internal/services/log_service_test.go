@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/drujensen/calorie-count/internal/models"
+	"github.com/drujensen/calorie-count/internal/repositories"
 )
 
 // --- mock log repository ---
@@ -95,19 +96,37 @@ func sameDate(a, b time.Time) bool {
 
 // --- helpers ---
 
+// mockWeightRepo is a no-op weight repository for tests that don't need weight data.
+type mockWeightRepo struct{}
+
+func (m *mockWeightRepo) AddEntry(_ context.Context, _ int, _ float64) (models.WeightEntry, error) {
+	return models.WeightEntry{}, nil
+}
+func (m *mockWeightRepo) ListByUser(_ context.Context, _ int, _ int) ([]models.WeightEntry, error) {
+	return nil, nil
+}
+func (m *mockWeightRepo) GetLatest(_ context.Context, _ int) (models.WeightEntry, error) {
+	return models.WeightEntry{}, repositories.ErrNotFound
+}
+
 func newTestLogService() (LogService, *mockLogRepo, *mockUserRepo) {
 	logRepo := newMockLogRepo()
 	userRepo := newMockUserRepo()
-	svc := NewLogService(logRepo, userRepo)
+	svc := NewLogService(logRepo, userRepo, &mockWeightRepo{})
 	return svc, logRepo, userRepo
 }
 
 func seedUser(t *testing.T, repo *mockUserRepo) models.User {
 	t.Helper()
 	u, err := repo.Create(context.Background(), models.User{
-		Email:        "logtest@example.com",
-		PasswordHash: "hash",
-		CalorieGoal:  2000,
+		Email:              "logtest@example.com",
+		PasswordHash:       "hash",
+		CalorieGoal:        2000,
+		CurrentWeightLbs:   150,
+		HeightIn:           68,
+		Age:                30,
+		Sex:                "male",
+		ActivityLevel:      "sedentary",
 	})
 	if err != nil {
 		t.Fatalf("seeding user: %v", err)
@@ -254,7 +273,7 @@ func TestLogService_GetSummary_MacroPercentages(t *testing.T) {
 		t.Fatalf("add entry: %v", err)
 	}
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -282,7 +301,7 @@ func TestLogService_GetSummary_ZeroCaloriesNoPercentages(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -296,7 +315,6 @@ func TestLogService_GetSummary_ZeroCaloriesNoPercentages(t *testing.T) {
 func TestLogService_GetSummary_WeightImpactLbs(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
-	// user has CalorieGoal = 2000
 
 	// Log 2500 cal today
 	_, err := svc.AddEntry(context.Background(), user.ID, models.LogEntry{
@@ -308,13 +326,13 @@ func TestLogService_GetSummary_WeightImpactLbs(t *testing.T) {
 		t.Fatalf("add entry: %v", err)
 	}
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
 
-	// surplus = 500, days = 1, weightImpact = 500*1/3500 ≈ 0.143
-	expected := 500.0 * 1 / 3500
+	_, tdee := calcBMRTDEE(user)
+	expected := (2500.0 - float64(tdee)) / 3500.0
 	if abs(ps.WeightImpactLbs-expected) > 0.001 {
 		t.Errorf("expected WeightImpactLbs %.4f, got %.4f", expected, ps.WeightImpactLbs)
 	}
@@ -325,7 +343,7 @@ func TestLogService_GetSummary_PeriodNormalization(t *testing.T) {
 	user := seedUser(t, userRepo)
 
 	// Unknown period should default to "daily"
-	ps, err := svc.GetSummary(context.Background(), user.ID, "unknown")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "unknown", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -338,7 +356,7 @@ func TestGetSummary_DailyPeriod(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -354,7 +372,7 @@ func TestGetSummary_WeeklyPeriod(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "weekly")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "weekly", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -366,17 +384,18 @@ func TestGetSummary_WeeklyPeriod(t *testing.T) {
 func TestGetSummary_WeightImpact_Surplus(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
-	// user.CalorieGoal = 2000
 
-	// 2500 cal today: surplus = 500
+	_, tdee := calcBMRTDEE(user)
+	// Log more than TDEE to guarantee a surplus
+	surplus := tdee + 500
 	_, err := svc.AddEntry(context.Background(), user.ID, models.LogEntry{
-		FoodName: "Surplus Meal", Calories: 2500, ProteinG: 50,
+		FoodName: "Surplus Meal", Calories: surplus, ProteinG: 50,
 	})
 	if err != nil {
 		t.Fatalf("add entry: %v", err)
 	}
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -392,17 +411,18 @@ func TestGetSummary_WeightImpact_Surplus(t *testing.T) {
 func TestGetSummary_WeightImpact_Deficit(t *testing.T) {
 	svc, _, userRepo := newTestLogService()
 	user := seedUser(t, userRepo)
-	// user.CalorieGoal = 2000
 
-	// 1500 cal today: deficit = -500
+	_, tdee := calcBMRTDEE(user)
+	// Log less than TDEE to guarantee a deficit
+	deficit := tdee - 500
 	_, err := svc.AddEntry(context.Background(), user.ID, models.LogEntry{
-		FoodName: "Light Meal", Calories: 1500, ProteinG: 30,
+		FoodName: "Light Meal", Calories: deficit, ProteinG: 30,
 	})
 	if err != nil {
 		t.Fatalf("add entry: %v", err)
 	}
 
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}
@@ -420,7 +440,7 @@ func TestGetSummary_NoDivisionByZero(t *testing.T) {
 	user := seedUser(t, userRepo)
 
 	// No entries — calories = 0
-	ps, err := svc.GetSummary(context.Background(), user.ID, "daily")
+	ps, err := svc.GetSummary(context.Background(), user.ID, "daily", time.Now())
 	if err != nil {
 		t.Fatalf("get summary: %v", err)
 	}

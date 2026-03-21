@@ -52,7 +52,7 @@ func main() {
 	logRepo := repositories.NewLogRepository(database)
 	weightRepo := repositories.NewWeightRepository(database)
 	authSvc := services.NewAuthService(userRepo, sessionRepo)
-	logSvc := services.NewLogService(logRepo, userRepo)
+	logSvc := services.NewLogService(logRepo, userRepo, weightRepo)
 	weightSvc := services.NewWeightService(weightRepo, userRepo)
 
 	isProduction := cfg.Env == "production"

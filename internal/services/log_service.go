@@ -26,13 +26,14 @@ type LogService interface {
 }
 
 type logService struct {
-	logs  repositories.LogRepository
-	users repositories.UserRepository
+	logs    repositories.LogRepository
+	users   repositories.UserRepository
+	weights repositories.WeightRepository
 }
 
 // NewLogService creates a LogService with the given repositories.
-func NewLogService(logs repositories.LogRepository, users repositories.UserRepository) LogService {
-	return &logService{logs: logs, users: users}
+func NewLogService(logs repositories.LogRepository, users repositories.UserRepository, weights repositories.WeightRepository) LogService {
+	return &logService{logs: logs, users: users, weights: weights}
 }
 
 // AddEntry validates and inserts a new log entry for the given user.
@@ -165,10 +166,18 @@ func (s *logService) GetSummary(ctx context.Context, userID int, period string, 
 		ps.CarbsPct = macro.TotalCarbsG * 4 / total * 100
 	}
 
-	if macro.Days > 0 && user.CalorieGoal > 0 {
-		avgDaily := float64(macro.TotalCalories) / float64(macro.Days)
-		surplus := avgDaily - float64(user.CalorieGoal)
-		ps.WeightImpactLbs = surplus * float64(macro.Days) / 3500
+	if macro.Days > 0 {
+		userForCalc := user
+		if latest, err := s.weights.GetLatest(ctx, userID); err == nil {
+			userForCalc.CurrentWeightLbs = latest.WeightLbs
+		}
+		_, tdee := calcBMRTDEE(userForCalc)
+		if tdee > 0 {
+			// Compare calories eaten vs calories burned (TDEE × days logged).
+			// Positive surplus = weight gain; negative = weight loss.
+			deficit := float64(tdee)*float64(macro.Days) - float64(macro.TotalCalories)
+			ps.WeightImpactLbs = -deficit / 3500
+		}
 	}
 
 	return ps, nil

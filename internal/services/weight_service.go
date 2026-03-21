@@ -123,7 +123,11 @@ func (s *weightService) GetGoalData(ctx context.Context, userID int, calorieGoal
 		currentWeight = latest.WeightLbs
 	}
 
-	bmr, tdee := calcBMRTDEE(user)
+	// Use the resolved current weight for BMR/TDEE so the calculation reflects
+	// actual body weight, not a potentially stale value in the profile.
+	userForCalc := user
+	userForCalc.CurrentWeightLbs = currentWeight
+	bmr, tdee := calcBMRTDEE(userForCalc)
 	dailyDeficit := tdee - calorieGoal
 	weeklyLoss := float64(dailyDeficit) * 7.0 / 3500.0
 
