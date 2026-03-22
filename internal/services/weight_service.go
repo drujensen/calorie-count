@@ -15,7 +15,7 @@ import (
 type WeightService interface {
 	LogWeight(ctx context.Context, userID int, weightLbs float64) (models.WeightEntry, error)
 	GetBMIHistory(ctx context.Context, userID int) (points []models.BMIPoint, currentBMI float64, category string, err error)
-	GetGoalData(ctx context.Context, userID int, calorieGoal int) (models.GoalData, error)
+	GetGoalData(ctx context.Context, userID int, calorieGoal int, now time.Time) (models.GoalData, error)
 }
 
 type weightService struct {
@@ -95,7 +95,7 @@ func (s *weightService) GetBMIHistory(ctx context.Context, userID int) ([]models
 }
 
 // GetGoalData returns weight history, goal projection, and metabolic estimates.
-func (s *weightService) GetGoalData(ctx context.Context, userID int, calorieGoal int) (models.GoalData, error) {
+func (s *weightService) GetGoalData(ctx context.Context, userID int, calorieGoal int, now time.Time) (models.GoalData, error) {
 	user, err := s.users.GetByID(ctx, userID)
 	if err != nil {
 		return models.GoalData{}, fmt.Errorf("getting user: %w", err)
@@ -145,13 +145,12 @@ func (s *weightService) GetGoalData(ctx context.Context, userID int, calorieGoal
 	if gd.HasTarget && weeklyLoss > 0 && currentWeight > user.TargetWeightLbs {
 		lbsToLose := currentWeight - user.TargetWeightLbs
 		daysToGoal := lbsToLose / weeklyLoss * 7
-		est := time.Now().AddDate(0, 0, int(math.Ceil(daysToGoal)))
+		est := now.AddDate(0, 0, int(math.Ceil(daysToGoal)))
 		gd.EstimatedDate = &est
 	} else if gd.HasTarget && weeklyLoss < 0 && currentWeight < user.TargetWeightLbs {
-		// Gaining toward target
 		lbsToGain := user.TargetWeightLbs - currentWeight
 		daysToGoal := lbsToGain / math.Abs(weeklyLoss) * 7
-		est := time.Now().AddDate(0, 0, int(math.Ceil(daysToGoal)))
+		est := now.AddDate(0, 0, int(math.Ceil(daysToGoal)))
 		gd.EstimatedDate = &est
 	}
 

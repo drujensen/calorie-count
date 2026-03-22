@@ -87,28 +87,9 @@
 
 {{if .AIAvailable}}
 <script>
-// Ensure the URL always carries the client's local date and timezone offset
-// so the server computes day boundaries in the user's timezone, not UTC.
+// Append tz to prev/next nav links so it survives navigation.
 (function() {
-  var tzOffset = new Date().getTimezoneOffset(); // minutes behind UTC (PST=480)
-  var params = new URLSearchParams(window.location.search);
-  var needsRedirect = false;
-  if (!params.has('date')) {
-    var d = new Date();
-    var localDate = d.getFullYear() + '-' +
-      String(d.getMonth() + 1).padStart(2, '0') + '-' +
-      String(d.getDate()).padStart(2, '0');
-    params.set('date', localDate);
-    needsRedirect = true;
-  }
-  if (!params.has('tz')) {
-    params.set('tz', tzOffset);
-    needsRedirect = true;
-  }
-  if (needsRedirect) {
-    window.location.replace('/log?' + params.toString());
-  }
-  // Append tz to prev/next nav links so it survives navigation.
+  var tzOffset = new Date().getTimezoneOffset();
   document.querySelectorAll('a[href^="/log?date="]').forEach(function(a) {
     if (a.href.indexOf('tz=') === -1) { a.href += '&tz=' + tzOffset; }
   });
@@ -309,6 +290,7 @@
       if (description) formData.append('description', description);
       if (photoBlob) formData.append('photo', photoBlob, 'photo.jpg');
       formData.append('date', '{{.ViewDateStr}}');
+      formData.append('tz', new Date().getTimezoneOffset());
 
       fetch('/api/log/photo', {method: 'POST', body: formData})
         .then(function(res) { return res.json(); })

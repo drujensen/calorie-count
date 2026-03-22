@@ -180,9 +180,17 @@ func (h *WebHandler) Log(w http.ResponseWriter, r *http.Request) {
 	csrfToken := middleware.GetCSRFToken(r)
 	aiAvailable := h.aiSvc.IsAvailable(r.Context())
 
-	// Resolve the date to view. Default to today.
-	// Use the client's timezone offset (minutes behind UTC) from the "tz" cookie so
-	// that day boundaries match the browser's local date, not the server's UTC clock.
+	// If no tz param yet, send a tiny bootstrap page that resolves the client's
+	// local date + timezone and immediately redirects. This prevents the flash
+	// caused by the server rendering UTC "today" before JS could fix it.
+	if r.URL.Query().Get("tz") == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head><meta charset=utf-8>` + //nolint:errcheck
+			`<script>var d=new Date(),tz=d.getTimezoneOffset(),` +
+			`dt=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');` +
+			`location.replace('/log?date='+dt+'&tz='+tz);</script></head><body></body></html>`))
+		return
+	}
 	loc := clientLocation(r)
 	now := time.Now().In(loc)
 	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
@@ -235,6 +243,14 @@ func (h *WebHandler) Overview(w http.ResponseWriter, r *http.Request) {
 	user, _ := middleware.UserFromContext(r.Context())
 	csrfToken := middleware.GetCSRFToken(r)
 
+	if r.URL.Query().Get("tz") == "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head><meta charset=utf-8>` + //nolint:errcheck
+			`<script>var tz=new Date().getTimezoneOffset(),p=new URLSearchParams(location.search);` +
+			`p.set('tz',tz);location.replace('/?'+p.toString());</script></head><body></body></html>`))
+		return
+	}
+
 	period := r.URL.Query().Get("period")
 	if period == "" {
 		period = "daily"
@@ -257,7 +273,7 @@ func (h *WebHandler) Overview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	goalData, err := h.weightSvc.GetGoalData(r.Context(), user.ID, user.CalorieGoal)
+	goalData, err := h.weightSvc.GetGoalData(r.Context(), user.ID, user.CalorieGoal, now)
 	if err != nil {
 		slog.Error("getting goal data", "error", err)
 	}
@@ -298,7 +314,8 @@ func (h *WebHandler) Goal(w http.ResponseWriter, r *http.Request) {
 	user, _ := middleware.UserFromContext(r.Context())
 	csrfToken := middleware.GetCSRFToken(r)
 
-	goalData, err := h.weightSvc.GetGoalData(r.Context(), user.ID, user.CalorieGoal)
+	now := time.Now().In(clientLocation(r))
+	goalData, err := h.weightSvc.GetGoalData(r.Context(), user.ID, user.CalorieGoal, now)
 	if err != nil {
 		slog.Error("getting goal data", "error", err)
 	}

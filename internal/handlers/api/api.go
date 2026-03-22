@@ -16,6 +16,20 @@ import (
 	"github.com/drujensen/calorie-count/internal/templates"
 )
 
+// clientLocation parses the "tz" form/query value (browser getTimezoneOffset()
+// — minutes behind UTC, e.g. PST=480) into a *time.Location. Falls back to UTC.
+func clientLocation(r *http.Request) *time.Location {
+	tzStr := r.FormValue("tz")
+	if tzStr == "" {
+		tzStr = r.URL.Query().Get("tz")
+	}
+	offsetMin, err := strconv.Atoi(tzStr)
+	if err != nil {
+		return time.UTC
+	}
+	return time.FixedZone("client", -offsetMin*60)
+}
+
 // APIHandler handles JSON API requests.
 type APIHandler struct {
 	logSvc    services.LogService
@@ -103,14 +117,15 @@ func (h *APIHandler) PhotoLogEntry(w http.ResponseWriter, r *http.Request) {
 	// Only override the timestamp for past dates so today's entries keep their
 	// actual wall-clock time instead of being stamped at local midnight (which
 	// can fall in yesterday UTC and break the daily summary query).
+	loc := clientLocation(r)
 	var logDate time.Time
 	if dateStr := r.FormValue("date"); dateStr != "" {
-		if parsed, err := time.ParseInLocation("2006-01-02", dateStr, time.Local); err == nil {
-			now := time.Now()
-			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.Local)
+		if parsed, err := time.ParseInLocation("2006-01-02", dateStr, loc); err == nil {
+			now := time.Now().In(loc)
+			today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 			if parsed.Before(today) {
-				// Use noon local time to avoid UTC day-boundary issues.
-				logDate = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 12, 0, 0, 0, time.Local)
+				// Use noon client-local time to avoid UTC day-boundary issues.
+				logDate = time.Date(parsed.Year(), parsed.Month(), parsed.Day(), 12, 0, 0, 0, loc)
 			}
 		}
 	}
