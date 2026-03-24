@@ -289,7 +289,7 @@
       var formData = new FormData();
       if (description) formData.append('description', description);
       if (photoBlob) formData.append('photo', photoBlob, 'photo.jpg');
-      formData.append('date', '{{.ViewDateStr}}');
+      {{if not .IsToday}}formData.append('date', '{{.ViewDateStr}}');{{end}}
       formData.append('tz', new Date().getTimezoneOffset());
 
       fetch('/api/log/photo', {method: 'POST', body: formData})
@@ -342,7 +342,7 @@
         if (data.error) { showError(data.error); return; }
         addAIMessage(data.data.message);
         if (data.data.done) {
-          if (data.data.entry) { addEntryToList(data.data.entry); }
+          if (data.data.entry) { addEntryToList(data.data.entry); updateSummaryBar(data.data.entry); }
           resetLogUI();
         } else {
           document.getElementById('chat-input-area').style.display = 'flex';
