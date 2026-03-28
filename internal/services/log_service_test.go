@@ -69,7 +69,7 @@ func (m *mockLogRepo) Update(_ context.Context, entry models.LogEntry) (models.L
 	return models.LogEntry{}, errors.New("not found")
 }
 
-func (m *mockLogRepo) SumByPeriod(_ context.Context, userID int, from, to time.Time) (models.MacroSummary, error) {
+func (m *mockLogRepo) SumByPeriod(_ context.Context, userID int, from, to time.Time, tzOffsetMin int) (models.MacroSummary, error) {
 	if m.sumErr != nil {
 		return models.MacroSummary{}, m.sumErr
 	}

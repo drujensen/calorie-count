@@ -17,7 +17,11 @@ type LogRepository interface {
 	Update(ctx context.Context, entry models.LogEntry) (models.LogEntry, error)
 	ListByUserAndDate(ctx context.Context, userID int, date time.Time) ([]models.LogEntry, error)
 	Delete(ctx context.Context, entryID int, userID int) error
-	SumByPeriod(ctx context.Context, userID int, from, to time.Time) (models.MacroSummary, error)
+	// SumByPeriod sums macros for entries between from and to (inclusive).
+	// tzOffsetMin is the client's timezone offset in minutes west of UTC
+	// (matches JavaScript's getTimezoneOffset(); PDT = 420, JST = -540).
+	// It is used to group entries by local date rather than UTC date.
+	SumByPeriod(ctx context.Context, userID int, from, to time.Time, tzOffsetMin int) (models.MacroSummary, error)
 }
 
 type logRepository struct {
@@ -107,7 +111,7 @@ func (r *logRepository) ListByUserAndDate(ctx context.Context, userID int, date 
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at
 		 FROM log_entries
-		 WHERE user_id = ? AND datetime(logged_at) >= datetime(?) AND datetime(logged_at) <= datetime(?)
+		 WHERE user_id = ? AND logged_at >= ? AND logged_at <= ?
 		 ORDER BY logged_at DESC`,
 		userID, fromStr, toStr,
 	)
@@ -152,10 +156,19 @@ func (r *logRepository) Delete(ctx context.Context, entryID int, userID int) err
 	return nil
 }
 
-// SumByPeriod returns macro totals and distinct day count for the given period.
-func (r *logRepository) SumByPeriod(ctx context.Context, userID int, from, to time.Time) (models.MacroSummary, error) {
+// SumByPeriod returns macro totals and distinct local-day count for the given period.
+// tzOffsetMin follows the JavaScript getTimezoneOffset() convention: positive = west of UTC
+// (PDT = 420, JST = -540). It is applied to logged_at before grouping by date so that
+// entries spanning UTC midnight within a single local day are counted as one day.
+func (r *logRepository) SumByPeriod(ctx context.Context, userID int, from, to time.Time, tzOffsetMin int) (models.MacroSummary, error) {
 	fromStr := from.UTC().Format(time.RFC3339)
 	toStr := to.UTC().Format(time.RFC3339)
+
+	// Build a SQLite datetime modifier that converts UTC → local time.
+	// getTimezoneOffset() is positive for zones west of UTC, so negate to get
+	// the number of minutes to ADD to UTC to reach local time.
+	// e.g. PDT (420) → "-420 minutes"; JST (-540) → "540 minutes"
+	tzMod := fmt.Sprintf("%d minutes", -tzOffsetMin)
 
 	var summary models.MacroSummary
 	err := r.db.QueryRowContext(ctx,
@@ -164,10 +177,10 @@ func (r *logRepository) SumByPeriod(ctx context.Context, userID int, from, to ti
 			COALESCE(SUM(protein_g), 0.0),
 			COALESCE(SUM(fat_g), 0.0),
 			COALESCE(SUM(carbs_g), 0.0),
-			COUNT(DISTINCT date(logged_at))
+			COUNT(DISTINCT date(logged_at, ?))
 		 FROM log_entries
-		 WHERE user_id = ? AND datetime(logged_at) >= datetime(?) AND datetime(logged_at) <= datetime(?)`,
-		userID, fromStr, toStr,
+		 WHERE user_id = ? AND logged_at >= ? AND logged_at <= ?`,
+		tzMod, userID, fromStr, toStr,
 	).Scan(
 		&summary.TotalCalories,
 		&summary.TotalProteinG,

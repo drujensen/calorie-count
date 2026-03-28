@@ -111,7 +111,10 @@ func (s *logService) GetSummaryForDate(ctx context.Context, userID int, date tim
 	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
-	summary, err := s.logs.SumByPeriod(ctx, userID, from, to)
+	_, offsetSec := from.Zone()
+	tzOffsetMin := -offsetSec / 60
+
+	summary, err := s.logs.SumByPeriod(ctx, userID, from, to, tzOffsetMin)
 	if err != nil {
 		return models.MacroSummary{}, fmt.Errorf("summing entries for date: %w", err)
 	}
@@ -137,7 +140,10 @@ func (s *logService) GetSummary(ctx context.Context, userID int, period string, 
 		to = today.Add(24*time.Hour - time.Nanosecond)
 	}
 
-	macro, err := s.logs.SumByPeriod(ctx, userID, from, to)
+	_, offsetSec := today.Zone()
+	tzOffsetMin := -offsetSec / 60
+
+	macro, err := s.logs.SumByPeriod(ctx, userID, from, to, tzOffsetMin)
 	if err != nil {
 		return models.PeriodSummary{}, fmt.Errorf("summing period entries: %w", err)
 	}

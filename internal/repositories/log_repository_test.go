@@ -211,7 +211,7 @@ func TestLogRepository_SumByPeriod(t *testing.T) {
 	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
-	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to)
+	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestLogRepository_SumByPeriod_Empty(t *testing.T) {
 	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
-	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to)
+	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestSumByPeriod_MultipleEntries(t *testing.T) {
 	from := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
-	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to)
+	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, from, to, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -328,7 +328,7 @@ func TestSumByPeriod_EmptyPeriod(t *testing.T) {
 	past := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 	to := past.Add(24*time.Hour - time.Nanosecond)
 
-	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, past, to)
+	summary, err := logRepo.SumByPeriod(context.Background(), user.ID, past, to, 0)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
