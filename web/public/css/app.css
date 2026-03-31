@@ -253,6 +253,26 @@ textarea {
     margin-top: 0.75rem;
 }
 
+/* Meal Groups */
+.meal-group {
+    margin-top: 1rem;
+}
+
+.meal-group__header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted, #888);
+    padding: 0.25rem 0;
+    margin-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.meal-group__header--empty {
+    display: none;
+}
+
 /* Entry List */
 .entry-list {
     display: flex;

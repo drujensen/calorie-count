@@ -112,7 +112,7 @@ func (r *logRepository) ListByUserAndDate(ctx context.Context, userID int, date 
 		`SELECT id, user_id, food_name, calories, protein_g, fat_g, carbs_g, amount, unit, image_path, notes, logged_at
 		 FROM log_entries
 		 WHERE user_id = ? AND logged_at >= ? AND logged_at <= ?
-		 ORDER BY logged_at DESC`,
+		 ORDER BY logged_at ASC`,
 		userID, fromStr, toStr,
 	)
 	if err != nil {

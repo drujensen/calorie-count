@@ -42,6 +42,37 @@ var tmplFuncs = template.FuncMap{
 	"sub":      func(a, b int) int { return a - b },
 }
 
+// MealGroup groups log entries under a named meal category.
+type MealGroup struct {
+	ID      string // "breakfast" | "lunch" | "dinner" — used as HTML element ID suffix
+	Name    string // display label
+	Entries []models.LogEntry
+}
+
+// groupEntriesByMeal splits entries into Breakfast/Lunch/Dinner buckets using
+// the local timezone. Before 10:00 = Breakfast, 10:00–14:59 = Lunch, 15:00+ = Dinner.
+// Entries are assumed to already be sorted oldest-first.
+func groupEntriesByMeal(entries []models.LogEntry, loc *time.Location) []MealGroup {
+	groups := []MealGroup{
+		{ID: "breakfast", Name: "Breakfast"},
+		{ID: "lunch", Name: "Lunch"},
+		{ID: "dinner", Name: "Dinner"},
+	}
+	for _, e := range entries {
+		local := e.LoggedAt.In(loc)
+		min := local.Hour()*60 + local.Minute()
+		switch {
+		case min < 10*60:
+			groups[0].Entries = append(groups[0].Entries, e)
+		case min < 15*60:
+			groups[1].Entries = append(groups[1].Entries, e)
+		default:
+			groups[2].Entries = append(groups[2].Entries, e)
+		}
+	}
+	return groups
+}
+
 // PageData holds common data passed to all page templates.
 type PageData struct {
 	User        *models.User
@@ -49,6 +80,7 @@ type PageData struct {
 	Success     string
 	ActiveTab   string
 	Entries     []models.LogEntry
+	MealGroups  []MealGroup
 	Summary     models.MacroSummary
 	AIAvailable bool
 	CSRFToken   string
@@ -226,6 +258,7 @@ func (h *WebHandler) Log(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pd.Entries = entries
+	pd.MealGroups = groupEntriesByMeal(entries, viewDate.Location())
 
 	summary, err := h.logSvc.GetSummaryForDate(r.Context(), user.ID, viewDate)
 	if err != nil {

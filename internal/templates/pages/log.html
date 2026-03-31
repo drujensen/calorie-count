@@ -77,10 +77,15 @@
   <div class="alert alert--error">AI logging unavailable. Please check your Ollama server.</div>
   {{end}}
 
-  <!-- Entry list -->
+  <!-- Entry list grouped by meal -->
   <div id="entry-list">
-    {{range .Entries}}
-      {{template "log-entry-row" .}}
+    {{range .MealGroups}}
+    <div class="meal-group" id="meal-{{.ID}}">
+      <div class="meal-group__header{{if not .Entries}} meal-group__header--empty{{end}}">{{.Name}}</div>
+      {{range .Entries}}
+        {{template "log-entry-row" .}}
+      {{end}}
+    </div>
     {{end}}
   </div>
 </div>
@@ -194,8 +199,15 @@
     }
   }
 
+  function mealSectionId(utcStr) {
+    var d = new Date(utcStr);
+    var min = d.getHours() * 60 + d.getMinutes();
+    if (min < 600) return 'meal-breakfast';   // before 10:00
+    if (min < 900) return 'meal-lunch';       // 10:00–14:59
+    return 'meal-dinner';                     // 15:00+
+  }
+
   function addEntryToList(entry) {
-    var list = document.getElementById('entry-list');
     var utc = entry.LoggedAt || '';
     var id = entry.ID;
     var html = '<div class="log-entry" id="entry-' + id + '" data-calories="' + (entry.Calories || 0) + '" data-protein="' + Math.round(entry.ProteinG || 0) + '" data-fat="' + Math.round(entry.FatG || 0) + '" data-carbs="' + Math.round(entry.CarbsG || 0) + '">' +
@@ -230,10 +242,15 @@
         '</div>' +
       '</div>' +
     '</div>';
-    list.insertAdjacentHTML('afterbegin', html);
+    var section = document.getElementById(mealSectionId(utc));
+    if (!section) return;
+    section.insertAdjacentHTML('beforeend', html);
+    // Reveal the header if this is the first entry in this section
+    var header = section.querySelector('.meal-group__header');
+    if (header) header.classList.remove('meal-group__header--empty');
     formatEntryTimes();
     if (typeof htmx !== 'undefined') {
-      htmx.process(list.firstElementChild);
+      htmx.process(section.lastElementChild);
     }
   }
 
