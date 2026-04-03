@@ -10,8 +10,7 @@
     <h3>Log Weight</h3>
     <form class="weight-log-form" id="weight-log-form"
           hx-post="/api/weight"
-          hx-swap="none"
-          hx-on::after-request="if(event.detail.successful) { window.location.reload(); }">
+          hx-swap="none">
       <input type="hidden" name="_csrf" value="{{$.CSRFToken}}">
       <div class="weight-log-row">
         <input type="number" name="weight_lbs" placeholder="Weight (lbs)"

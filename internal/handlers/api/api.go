@@ -393,6 +393,7 @@ func (h *APIHandler) PostWeight(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	w.Header().Set("HX-Refresh", "true")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(struct { //nolint:errcheck
 		Data  interface{} `json:"data"`
