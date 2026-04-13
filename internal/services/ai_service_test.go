@@ -35,12 +35,16 @@ func makeTextResponse(content string) ollamaChatResponse {
 
 func makeLogJSONResponse(foodName string, calories int) ollamaChatResponse {
 	content, _ := json.Marshal(map[string]interface{}{
-		"log": map[string]interface{}{
-			"food_name": foodName,
-			"calories":  calories,
-			"protein_g": 10.0,
-			"fat_g":     5.0,
-			"carbs_g":   30.0,
+		"logs": []map[string]interface{}{
+			{
+				"food_name": foodName,
+				"calories":  calories,
+				"protein_g": 10.0,
+				"fat_g":     5.0,
+				"carbs_g":   30.0,
+				"amount":    1.0,
+				"unit":      "serving",
+			},
 		},
 	})
 	return makeTextResponse(string(content))
@@ -125,14 +129,14 @@ func TestAIService_StartSession_ImmediateToolCall(t *testing.T) {
 	if !conv.done {
 		t.Error("expected session to be done after immediate tool call")
 	}
-	if conv.result == nil {
+	if len(conv.result) == 0 {
 		t.Error("expected result to be set")
 	}
-	if conv.result.FoodName != "Apple" {
-		t.Errorf("expected food name 'Apple', got '%s'", conv.result.FoodName)
+	if conv.result[0].FoodName != "Apple" {
+		t.Errorf("expected food name 'Apple', got '%s'", conv.result[0].FoodName)
 	}
-	if conv.result.Calories != 95 {
-		t.Errorf("expected 95 calories, got %d", conv.result.Calories)
+	if conv.result[0].Calories != 95 {
+		t.Errorf("expected 95 calories, got %d", conv.result[0].Calories)
 	}
 }
 
@@ -207,21 +211,21 @@ func TestAIService_Continue_AnswerLeadsToToolCall(t *testing.T) {
 	}
 
 	// Continue — answer leads to tool call
-	msg, done, entry, err := svc.Continue(context.Background(), sessionID, "One medium banana")
+	msg, done, entries, err := svc.Continue(context.Background(), sessionID, "One medium banana")
 	if err != nil {
 		t.Fatalf("Continue error: %v", err)
 	}
 	if !done {
 		t.Error("expected done=true after tool call")
 	}
-	if entry == nil {
-		t.Fatal("expected entry to be non-nil")
+	if len(entries) == 0 {
+		t.Fatal("expected entries to be non-empty")
 	}
-	if entry.FoodName != "Banana" {
-		t.Errorf("expected food name 'Banana', got '%s'", entry.FoodName)
+	if entries[0].FoodName != "Banana" {
+		t.Errorf("expected food name 'Banana', got '%s'", entries[0].FoodName)
 	}
-	if entry.Calories != 105 {
-		t.Errorf("expected 105 calories, got %d", entry.Calories)
+	if entries[0].Calories != 105 {
+		t.Errorf("expected 105 calories, got %d", entries[0].Calories)
 	}
 	if msg == "" {
 		t.Error("expected non-empty confirmation message")

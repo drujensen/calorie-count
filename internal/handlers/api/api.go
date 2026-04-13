@@ -160,12 +160,12 @@ func (h *APIHandler) PhotoLogEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var persistedEntry *models.LogEntry
+	var persistedEntries []models.LogEntry
 	if done {
-		if entry := h.aiSvc.GetResult(sessionID); entry != nil {
-			created, saveErr := h.logSvc.AddEntry(r.Context(), user.ID, *entry)
+		for _, e := range h.aiSvc.GetResult(sessionID) {
+			created, saveErr := h.logSvc.AddEntry(r.Context(), user.ID, *e)
 			if saveErr == nil {
-				persistedEntry = &created
+				persistedEntries = append(persistedEntries, created)
 			}
 		}
 	}
@@ -176,15 +176,15 @@ func (h *APIHandler) PhotoLogEntry(w http.ResponseWriter, r *http.Request) {
 		Error *string     `json:"error"`
 	}{
 		Data: struct {
-			SessionID string           `json:"session_id"`
-			Message   string           `json:"message"`
-			Done      bool             `json:"done"`
-			Entry     *models.LogEntry `json:"entry"`
+			SessionID string         `json:"session_id"`
+			Message   string         `json:"message"`
+			Done      bool           `json:"done"`
+			Entries   []models.LogEntry `json:"entries"`
 		}{
 			SessionID: sessionID,
 			Message:   message,
 			Done:      done,
-			Entry:     persistedEntry,
+			Entries:   persistedEntries,
 		},
 	}
 	json.NewEncoder(w).Encode(resp) //nolint:errcheck
@@ -310,9 +310,9 @@ type chatResponse struct {
 }
 
 type chatData struct {
-	Done    bool             `json:"done"`
-	Message string           `json:"message"`
-	Entry   *models.LogEntry `json:"entry"`
+	Done    bool              `json:"done"`
+	Message string            `json:"message"`
+	Entries []models.LogEntry `json:"entries"`
 }
 
 // ChatLogEntry handles POST /api/log/chat.
@@ -335,20 +335,22 @@ func (h *APIHandler) ChatLogEntry(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	message, done, entry, err := h.aiSvc.Continue(r.Context(), req.SessionID, req.Answer)
+	message, done, aiEntries, err := h.aiSvc.Continue(r.Context(), req.SessionID, req.Answer)
 	if err != nil {
 		writeJSONError(w, "AI error: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	var persistedEntry *models.LogEntry
-	if done && entry != nil {
-		created, err := h.logSvc.AddEntry(r.Context(), user.ID, *entry)
-		if err != nil {
-			writeJSONError(w, "failed to save entry: "+err.Error(), http.StatusInternalServerError)
-			return
+	var persistedEntries []models.LogEntry
+	if done {
+		for _, e := range aiEntries {
+			created, saveErr := h.logSvc.AddEntry(r.Context(), user.ID, *e)
+			if saveErr != nil {
+				writeJSONError(w, "failed to save entry: "+saveErr.Error(), http.StatusInternalServerError)
+				return
+			}
+			persistedEntries = append(persistedEntries, created)
 		}
-		persistedEntry = &created
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -356,7 +358,7 @@ func (h *APIHandler) ChatLogEntry(w http.ResponseWriter, r *http.Request) {
 		Data: &chatData{
 			Done:    done,
 			Message: message,
-			Entry:   persistedEntry,
+			Entries: persistedEntries,
 		},
 	})
 }

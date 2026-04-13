@@ -25,9 +25,9 @@ type AIService interface {
 	// At least one of imageBase64 or description must be non-empty.
 	// logDate overrides the LoggedAt timestamp on the resulting entry; zero means now.
 	StartSession(ctx context.Context, userID int, imageBase64, mimeType, description string, logDate time.Time) (sessionID string, message string, done bool, err error)
-	Continue(ctx context.Context, sessionID string, userAnswer string) (message string, done bool, entry *models.LogEntry, err error)
-	// GetResult returns the LogEntry for a completed session, or nil if not done.
-	GetResult(sessionID string) *models.LogEntry
+	Continue(ctx context.Context, sessionID string, userAnswer string) (message string, done bool, entries []*models.LogEntry, err error)
+	// GetResult returns the LogEntries for a completed session, or nil if not done.
+	GetResult(sessionID string) []*models.LogEntry
 	// CorrectEntry sends a natural-language correction for an existing entry
 	// and returns the revised LogEntry.
 	CorrectEntry(ctx context.Context, original models.LogEntry, correction string) (*models.LogEntry, error)
@@ -40,7 +40,7 @@ type conversation struct {
 	logDate   time.Time // override logged_at; zero means use current time
 	messages  []ollamaMessage
 	createdAt time.Time
-	result    *models.LogEntry
+	result    []*models.LogEntry
 	done      bool
 }
 
@@ -72,12 +72,14 @@ type ollamaChatResponse struct {
 	Done    bool          `json:"done"`
 }
 
-const systemPrompt = `You are a nutrition assistant helping track calorie intake. When shown a food photo, identify the food and estimate its nutritional content.
+const systemPrompt = `You are a nutrition assistant helping track calorie intake. When shown a food photo or description, identify every food item and estimate its nutritional content.
 
-If you need clarification about preparation method or specific ingredients, ask ONE short friendly question at a time. Do not ask more than 2 clarifying questions total. Always make a reasonable estimate for portion size rather than asking about it.
+CLARIFYING QUESTIONS: Only ask a clarifying question if the answer would change your calorie estimate by more than 20%. Never ask about cooking method for eggs (fried, boiled, scrambled — calories are nearly identical). Never ask about portion size — use a standard serving. You may ask at most ONE question total. When in doubt, make your best estimate and log it immediately.
 
-When you have enough information, respond with ONLY a JSON object in this exact format (no other text):
-{"log":{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving"}}
+When you have enough information (which is almost always on the first message), respond with ONLY a JSON object in this exact format (no other text):
+{"logs":[{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving"}]}
+
+For multiple items (e.g. "Enchiladas with Rice and Beans" or "Eggs, Bacon, and Toast"), include each as a separate object in the logs array.
 
 The amount field is a number and unit is a string such as "cup", "oz", "g", "ml", "slice", "piece", "tbsp", "tsp", or "serving".
 
@@ -181,12 +183,14 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 		createdAt: time.Now(),
 	}
 
-	// Check if the model responded with a JSON log entry.
-	if entry, confirmMsg, ok := parseLogJSON(resp.Message.Content, userID); ok {
+	// Check if the model responded with JSON log entries.
+	if entries, confirmMsg, ok := parseLogEntries(resp.Message.Content, userID); ok {
 		if !logDate.IsZero() {
-			entry.LoggedAt = logDate
+			for _, e := range entries {
+				e.LoggedAt = logDate
+			}
 		}
-		conv.result = entry
+		conv.result = entries
 		conv.done = true
 		s.mu.Lock()
 		s.sessions[sessionID] = conv
@@ -202,8 +206,8 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 }
 
 // Continue sends a user answer back to Ollama and returns the next message.
-// When done=true, entry is the LogEntry that the caller should persist.
-func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnswer string) (string, bool, *models.LogEntry, error) {
+// When done=true, entries are the LogEntries that the caller should persist.
+func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnswer string) (string, bool, []*models.LogEntry, error) {
 	s.mu.RLock()
 	conv, ok := s.sessions[sessionID]
 	s.mu.RUnlock()
@@ -229,20 +233,22 @@ func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnsw
 
 	conv.messages = append(conv.messages, resp.Message)
 
-	if entry, confirmMsg, ok := parseLogJSON(resp.Message.Content, conv.userID); ok {
+	if entries, confirmMsg, ok := parseLogEntries(resp.Message.Content, conv.userID); ok {
 		if !conv.logDate.IsZero() {
-			entry.LoggedAt = conv.logDate
+			for _, e := range entries {
+				e.LoggedAt = conv.logDate
+			}
 		}
-		conv.result = entry
+		conv.result = entries
 		conv.done = true
-		return confirmMsg, true, entry, nil
+		return confirmMsg, true, entries, nil
 	}
 
 	return resp.Message.Content, false, nil, nil
 }
 
-// GetResult returns the stored LogEntry for a completed session, or nil.
-func (s *aiServiceImpl) GetResult(sessionID string) *models.LogEntry {
+// GetResult returns the stored LogEntries for a completed session, or nil.
+func (s *aiServiceImpl) GetResult(sessionID string) []*models.LogEntry {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	conv, ok := s.sessions[sessionID]
@@ -292,50 +298,87 @@ Respond with only this JSON, filling in the correct values:
 		return nil, fmt.Errorf("calling Ollama: %w", err)
 	}
 
-	entry, _, ok := parseLogJSON(resp.Message.Content, original.UserID)
-	if !ok {
+	entries, _, ok := parseLogEntries(resp.Message.Content, original.UserID)
+	if !ok || len(entries) == 0 {
 		return nil, fmt.Errorf("AI did not return valid nutritional JSON: %s", resp.Message.Content)
 	}
-	return entry, nil
+	return entries[0], nil
 }
 
-// parseLogJSON checks if the model response contains a JSON log entry.
-// Returns the entry, a confirmation message, and true if found.
-func parseLogJSON(content string, userID int) (*models.LogEntry, string, bool) {
-	var wrapper struct {
-		Log struct {
-			FoodName string  `json:"food_name"`
-			Calories int     `json:"calories"`
-			ProteinG float64 `json:"protein_g"`
-			FatG     float64 `json:"fat_g"`
-			CarbsG   float64 `json:"carbs_g"`
-			Amount   float64 `json:"amount"`
-			Unit     string  `json:"unit"`
-		} `json:"log"`
-	}
+// logItem is the JSON shape for a single food entry returned by the LLM.
+type logItem struct {
+	FoodName string  `json:"food_name"`
+	Calories int     `json:"calories"`
+	ProteinG float64 `json:"protein_g"`
+	FatG     float64 `json:"fat_g"`
+	CarbsG   float64 `json:"carbs_g"`
+	Amount   float64 `json:"amount"`
+	Unit     string  `json:"unit"`
+}
+
+// parseLogEntries checks if the model response contains JSON log entries.
+// It accepts both the multi-item format {"logs":[...]} and the legacy single-item
+// format {"log":{...}}. Returns the entries, a confirmation message, and true if found.
+func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, bool) {
 	// Find the first '{' to handle any accidental leading text.
 	start := strings.Index(content, "{")
 	if start == -1 {
 		return nil, "", false
 	}
-	if err := json.Unmarshal([]byte(content[start:]), &wrapper); err != nil {
+	raw := []byte(content[start:])
+
+	// Try multi-item format first.
+	var multi struct {
+		Logs []logItem `json:"logs"`
+	}
+	if err := json.Unmarshal(raw, &multi); err == nil && len(multi.Logs) > 0 {
+		return buildEntries(multi.Logs, userID)
+	}
+
+	// Fall back to legacy single-item format.
+	var single struct {
+		Log logItem `json:"log"`
+	}
+	if err := json.Unmarshal(raw, &single); err == nil && single.Log.FoodName != "" {
+		return buildEntries([]logItem{single.Log}, userID)
+	}
+
+	return nil, "", false
+}
+
+func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, bool) {
+	entries := make([]*models.LogEntry, 0, len(items))
+	totalCal := 0
+	for _, item := range items {
+		if item.FoodName == "" {
+			continue
+		}
+		entries = append(entries, &models.LogEntry{
+			UserID:   userID,
+			FoodName: item.FoodName,
+			Calories: item.Calories,
+			ProteinG: item.ProteinG,
+			FatG:     item.FatG,
+			CarbsG:   item.CarbsG,
+			Amount:   item.Amount,
+			Unit:     item.Unit,
+		})
+		totalCal += item.Calories
+	}
+	if len(entries) == 0 {
 		return nil, "", false
 	}
-	if wrapper.Log.FoodName == "" {
-		return nil, "", false
+	var msg string
+	if len(entries) == 1 {
+		msg = fmt.Sprintf("Got it! Logging %s (%d cal).", entries[0].FoodName, entries[0].Calories)
+	} else {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.FoodName
+		}
+		msg = fmt.Sprintf("Got it! Logging %d items: %s (%d cal total).", len(entries), strings.Join(names, ", "), totalCal)
 	}
-	entry := &models.LogEntry{
-		UserID:   userID,
-		FoodName: wrapper.Log.FoodName,
-		Calories: wrapper.Log.Calories,
-		ProteinG: wrapper.Log.ProteinG,
-		FatG:     wrapper.Log.FatG,
-		CarbsG:   wrapper.Log.CarbsG,
-		Amount:   wrapper.Log.Amount,
-		Unit:     wrapper.Log.Unit,
-	}
-	msg := fmt.Sprintf("Got it! Logging %s (%d cal).", wrapper.Log.FoodName, wrapper.Log.Calories)
-	return entry, msg, true
+	return entries, msg, true
 }
 
 // chat sends a request to the Ollama /api/chat endpoint and returns the response.
