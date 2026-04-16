@@ -72,18 +72,21 @@ type ollamaChatResponse struct {
 	Done    bool          `json:"done"`
 }
 
-const systemPrompt = `You are a nutrition assistant helping track calorie intake. When shown a food photo or description, identify every food item and estimate its nutritional content.
+const systemPrompt = `You are a nutrition assistant helping track calorie intake. Log food immediately — almost never ask questions.
 
-CLARIFYING QUESTIONS: Only ask a clarifying question if the answer would change your calorie estimate by more than 20%. Never ask about cooking method for eggs (fried, boiled, scrambled — calories are nearly identical). Never ask about portion size — use a standard serving. You may ask at most ONE question total. When in doubt, make your best estimate and log it immediately.
+SINGLE VS. MULTIPLE ENTRIES: Log a single dish, recipe, or named food as ONE entry — never split it into its ingredients or components. Examples of ONE entry: "Chicken Pesto Sandwich", "Spaghetti with Meat Sauce", "Burrito Bowl", "Caesar Salad", "Eggs Benedict". Only create multiple entries when the user clearly lists separate, distinct dishes served together, e.g. "Eggs, Bacon, and Toast" → 3 entries, or "Soup and Salad" → 2 entries.
+
+CLARIFYING QUESTIONS: Almost never ask. Only ask if the answer would change your calorie estimate by more than 50% AND you cannot make any reasonable assumption. Never ask about portion size — assume a typical single-person serving. Never ask about cooking method. You may ask at most ONE question per session. Default is to estimate and log immediately without asking.
+
+NUTRITIONAL VALUES: You MUST provide realistic, non-zero estimates for calories, protein_g, fat_g, and carbs_g for any food that contains these nutrients. Never return 0 for calories or macros unless the food genuinely has none (e.g. water, plain tea). The calories should approximately equal (protein_g × 4) + (fat_g × 9) + (carbs_g × 4). Use standard nutrition references.
 
 When you have enough information (which is almost always on the first message), respond with ONLY a JSON object in this exact format (no other text):
-{"logs":[{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving"}]}
+{"logs":[{"food_name":"...","calories":0,"protein_g":0.0,"fat_g":0.0,"carbs_g":0.0,"amount":1.0,"unit":"serving","zero_cal":false}]}
 
-For multiple items (e.g. "Enchiladas with Rice and Beans" or "Eggs, Bacon, and Toast"), include each as a separate object in the logs array.
+For foods that are intentionally zero-calorie (e.g. diet soda, sparkling water, plain water, black coffee, plain tea, Zevia), set "zero_cal":true and leave all nutrient fields as 0.
 
 The amount field is a number and unit is a string such as "cup", "oz", "g", "ml", "slice", "piece", "tbsp", "tsp", or "serving".
 
-IMPORTANT: Always provide realistic estimates for ALL of protein_g, fat_g, and carbs_g — never leave them at 0 unless the food truly has none of that macro. The calories should approximately equal (protein_g × 4) + (fat_g × 9) + (carbs_g × 4). Use standard nutrition references to guide your estimates.
 Until you are ready to log, respond with only a plain conversational question or statement. Never mix JSON with other text.`
 
 // NewAIService creates an AIService and starts a background cleanup goroutine.
@@ -202,6 +205,12 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 	s.sessions[sessionID] = conv
 	s.mu.Unlock()
 
+	// If the LLM returned JSON but we couldn't extract valid entries (e.g. missing
+	// nutritional values), return a friendly message instead of raw JSON.
+	if strings.HasPrefix(strings.TrimSpace(resp.Message.Content), "{") {
+		return sessionID, "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil
+	}
+
 	return sessionID, resp.Message.Content, false, nil
 }
 
@@ -242,6 +251,10 @@ func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnsw
 		conv.result = entries
 		conv.done = true
 		return confirmMsg, true, entries, nil
+	}
+
+	if strings.HasPrefix(strings.TrimSpace(resp.Message.Content), "{") {
+		return "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil, nil
 	}
 
 	return resp.Message.Content, false, nil, nil
@@ -314,6 +327,7 @@ type logItem struct {
 	CarbsG   float64 `json:"carbs_g"`
 	Amount   float64 `json:"amount"`
 	Unit     string  `json:"unit"`
+	ZeroCal  bool    `json:"zero_cal"`
 }
 
 // parseLogEntries checks if the model response contains JSON log entries.
@@ -351,6 +365,10 @@ func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, bool
 	totalCal := 0
 	for _, item := range items {
 		if item.FoodName == "" {
+			continue
+		}
+		if item.Calories == 0 && item.ProteinG == 0 && item.FatG == 0 && item.CarbsG == 0 && !item.ZeroCal {
+			slog.Warn("skipping entry with no nutritional data", "food_name", item.FoodName)
 			continue
 		}
 		entries = append(entries, &models.LogEntry{
