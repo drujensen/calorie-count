@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"strings"
 	"sync"
@@ -334,6 +335,7 @@ type logItem struct {
 // It accepts both the multi-item format {"logs":[...]} and the legacy single-item
 // format {"log":{...}}. Returns the entries, a confirmation message, and true if found.
 func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, bool) {
+	slog.Debug("LLM raw response", "content", content)
 	// Find the first '{' to handle any accidental leading text.
 	start := strings.Index(content, "{")
 	if start == -1 {
@@ -370,6 +372,10 @@ func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, bool
 		if item.Calories == 0 && item.ProteinG == 0 && item.FatG == 0 && item.CarbsG == 0 && !item.ZeroCal {
 			slog.Warn("skipping entry with no nutritional data", "food_name", item.FoodName)
 			continue
+		}
+		if item.Calories == 0 && !item.ZeroCal {
+			item.Calories = int(math.Round(item.ProteinG*4 + item.FatG*9 + item.CarbsG*4))
+			slog.Warn("calories missing, computed from macros", "food_name", item.FoodName, "computed_calories", item.Calories)
 		}
 		entries = append(entries, &models.LogEntry{
 			UserID:   userID,
