@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -147,6 +148,8 @@ func (s *aiServiceImpl) IsAvailable(ctx context.Context) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
+const retryMsg = `Your previous response was not valid JSON or was missing nutritional data. Please provide the data in the required JSON format: {"logs":[...]}. Ensure you set "zero_cal":true for zero-calorie items and provide realistic non-zero values for all other foods.`
+
 // StartSession begins a food logging session with an optional image and/or text description.
 // At least one of imageBase64 or description must be non-empty.
 // logDate, if non-zero, is stored on the session and stamped onto the resulting entry.
@@ -176,8 +179,6 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 	if err != nil {
 		return "", "", false, fmt.Errorf("calling Ollama: %w", err)
 	}
-
-	// Append the assistant response to history.
 	msgs = append(msgs, resp.Message)
 
 	conv := &conversation{
@@ -187,31 +188,44 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 		createdAt: time.Now(),
 	}
 
-	// Check if the model responded with JSON log entries.
-	if entries, confirmMsg, ok := parseLogEntries(resp.Message.Content, userID); ok {
-		if !logDate.IsZero() {
-			for _, e := range entries {
-				e.LoggedAt = logDate
+	// Try to parse the initial response; retry up to 2 more times if JSON is invalid.
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			conv.messages = append(conv.messages, ollamaMessage{Role: "user", Content: retryMsg})
+			resp, err = s.chat(ctx, conv.messages)
+			if err != nil {
+				s.mu.Lock()
+				s.sessions[sessionID] = conv
+				s.mu.Unlock()
+				return "", "", false, fmt.Errorf("calling Ollama on retry: %w", err)
 			}
+			conv.messages = append(conv.messages, resp.Message)
 		}
-		conv.result = entries
-		conv.done = true
-		s.mu.Lock()
-		s.sessions[sessionID] = conv
-		s.mu.Unlock()
-		return sessionID, confirmMsg, true, nil
+
+		entries, confirmMsg, parseErr := parseLogEntries(resp.Message.Content, userID)
+		if parseErr == nil {
+			if !logDate.IsZero() {
+				for _, e := range entries {
+					e.LoggedAt = logDate
+				}
+			}
+			conv.result = entries
+			conv.done = true
+			s.mu.Lock()
+			s.sessions[sessionID] = conv
+			s.mu.Unlock()
+			return sessionID, confirmMsg, true, nil
+		}
+		slog.Warn("LLM JSON parsing failed, retrying", "attempt", i+1, "error", parseErr)
 	}
 
 	s.mu.Lock()
 	s.sessions[sessionID] = conv
 	s.mu.Unlock()
 
-	// If the LLM returned JSON but we couldn't extract valid entries (e.g. missing
-	// nutritional values), return a friendly message instead of raw JSON.
 	if strings.HasPrefix(strings.TrimSpace(resp.Message.Content), "{") {
 		return sessionID, "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil
 	}
-
 	return sessionID, resp.Message.Content, false, nil
 }
 
@@ -225,40 +239,53 @@ func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnsw
 		return "", false, nil, fmt.Errorf("session not found: %s", sessionID)
 	}
 
-	// Session already completed (tool already called in StartSession).
 	if conv.done {
 		return "Entry already logged.", true, conv.result, nil
 	}
 
-	// Append the user reply.
 	conv.messages = append(conv.messages, ollamaMessage{
 		Role:    "user",
 		Content: userAnswer,
 	})
 
-	resp, err := s.chat(ctx, conv.messages)
-	if err != nil {
-		return "", false, nil, fmt.Errorf("calling Ollama: %w", err)
-	}
+	var lastResp *ollamaChatResponse
+	var lastErr error
 
-	conv.messages = append(conv.messages, resp.Message)
-
-	if entries, confirmMsg, ok := parseLogEntries(resp.Message.Content, conv.userID); ok {
-		if !conv.logDate.IsZero() {
-			for _, e := range entries {
-				e.LoggedAt = conv.logDate
-			}
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			conv.messages = append(conv.messages, ollamaMessage{Role: "user", Content: retryMsg})
 		}
-		conv.result = entries
-		conv.done = true
-		return confirmMsg, true, entries, nil
+
+		resp, err := s.chat(ctx, conv.messages)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		lastResp = resp
+		conv.messages = append(conv.messages, resp.Message)
+
+		entries, confirmMsg, parseErr := parseLogEntries(resp.Message.Content, conv.userID)
+		if parseErr == nil {
+			if !conv.logDate.IsZero() {
+				for _, e := range entries {
+					e.LoggedAt = conv.logDate
+				}
+			}
+			conv.result = entries
+			conv.done = true
+			return confirmMsg, true, entries, nil
+		}
+		lastErr = parseErr
+		slog.Warn("LLM JSON parsing failed, retrying", "attempt", i+1, "error", parseErr)
 	}
 
-	if strings.HasPrefix(strings.TrimSpace(resp.Message.Content), "{") {
+	if lastResp == nil {
+		return "", false, nil, lastErr
+	}
+	if strings.HasPrefix(strings.TrimSpace(lastResp.Message.Content), "{") {
 		return "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil, nil
 	}
-
-	return resp.Message.Content, false, nil, nil
+	return lastResp.Message.Content, false, nil, nil
 }
 
 // GetResult returns the stored LogEntries for a completed session, or nil.
@@ -312,8 +339,8 @@ Respond with only this JSON, filling in the correct values:
 		return nil, fmt.Errorf("calling Ollama: %w", err)
 	}
 
-	entries, _, ok := parseLogEntries(resp.Message.Content, original.UserID)
-	if !ok || len(entries) == 0 {
+	entries, _, parseErr := parseLogEntries(resp.Message.Content, original.UserID)
+	if parseErr != nil || len(entries) == 0 {
 		return nil, fmt.Errorf("AI did not return valid nutritional JSON: %s", resp.Message.Content)
 	}
 	return entries[0], nil
@@ -333,17 +360,15 @@ type logItem struct {
 
 // parseLogEntries checks if the model response contains JSON log entries.
 // It accepts both the multi-item format {"logs":[...]} and the legacy single-item
-// format {"log":{...}}. Returns the entries, a confirmation message, and true if found.
-func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, bool) {
+// format {"log":{...}}. Returns the entries, a confirmation message, and nil on success.
+func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, error) {
 	slog.Debug("LLM raw response", "content", content)
-	// Find the first '{' to handle any accidental leading text.
 	start := strings.Index(content, "{")
 	if start == -1 {
-		return nil, "", false
+		return nil, "", errors.New("no JSON object found in response")
 	}
 	raw := []byte(content[start:])
 
-	// Try multi-item format first.
 	var multi struct {
 		Logs []logItem `json:"logs"`
 	}
@@ -351,7 +376,6 @@ func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, bo
 		return buildEntries(multi.Logs, userID)
 	}
 
-	// Fall back to legacy single-item format.
 	var single struct {
 		Log logItem `json:"log"`
 	}
@@ -359,23 +383,28 @@ func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, bo
 		return buildEntries([]logItem{single.Log}, userID)
 	}
 
-	return nil, "", false
+	return nil, "", errors.New("no valid log entries found in JSON")
 }
 
-func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, bool) {
+func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, error) {
 	entries := make([]*models.LogEntry, 0, len(items))
 	totalCal := 0
 	for _, item := range items {
-		if item.FoodName == "" {
-			continue
-		}
 		if item.Calories == 0 && item.ProteinG == 0 && item.FatG == 0 && item.CarbsG == 0 && !item.ZeroCal {
 			slog.Warn("skipping entry with no nutritional data", "food_name", item.FoodName)
 			continue
 		}
+		// Derive calories from macros if missing but macros are present.
 		if item.Calories == 0 && !item.ZeroCal {
 			item.Calories = int(math.Round(item.ProteinG*4 + item.FatG*9 + item.CarbsG*4))
-			slog.Warn("calories missing, computed from macros", "food_name", item.FoodName, "computed_calories", item.Calories)
+		}
+		amount := item.Amount
+		if amount == 0 {
+			amount = 1
+		}
+		unit := item.Unit
+		if unit == "" {
+			unit = "serving"
 		}
 		entries = append(entries, &models.LogEntry{
 			UserID:   userID,
@@ -384,25 +413,21 @@ func buildEntries(items []logItem, userID int) ([]*models.LogEntry, string, bool
 			ProteinG: item.ProteinG,
 			FatG:     item.FatG,
 			CarbsG:   item.CarbsG,
-			Amount:   item.Amount,
-			Unit:     item.Unit,
+			Amount:   amount,
+			Unit:     unit,
 		})
 		totalCal += item.Calories
 	}
 	if len(entries) == 0 {
-		return nil, "", false
+		return nil, "", errors.New("no valid entries after filtering")
 	}
 	var msg string
 	if len(entries) == 1 {
-		msg = fmt.Sprintf("Got it! Logging %s (%d cal).", entries[0].FoodName, entries[0].Calories)
+		msg = fmt.Sprintf("Logged: %s (%d cal)", entries[0].FoodName, entries[0].Calories)
 	} else {
-		names := make([]string, len(entries))
-		for i, e := range entries {
-			names[i] = e.FoodName
-		}
-		msg = fmt.Sprintf("Got it! Logging %d items: %s (%d cal total).", len(entries), strings.Join(names, ", "), totalCal)
+		msg = fmt.Sprintf("Logged %d items (%d cal total)", len(entries), totalCal)
 	}
-	return entries, msg, true
+	return entries, msg, nil
 }
 
 // chat sends a request to the Ollama /api/chat endpoint and returns the response.
