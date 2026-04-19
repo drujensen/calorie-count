@@ -79,6 +79,15 @@ func (s *logService) UpdateEntry(ctx context.Context, userID int, entryID int, e
 	if entry.Calories < 0 || entry.Calories > 10000 {
 		return models.LogEntry{}, fmt.Errorf("%w: calories must be between 0 and 10000", ErrInvalidEntry)
 	}
+	if entry.ProteinG < 0 {
+		return models.LogEntry{}, fmt.Errorf("%w: protein must be >= 0", ErrInvalidEntry)
+	}
+	if entry.FatG < 0 {
+		return models.LogEntry{}, fmt.Errorf("%w: fat must be >= 0", ErrInvalidEntry)
+	}
+	if entry.CarbsG < 0 {
+		return models.LogEntry{}, fmt.Errorf("%w: carbs must be >= 0", ErrInvalidEntry)
+	}
 	entry.ID = entryID
 	entry.UserID = userID
 	updated, err := s.logs.Update(ctx, entry)
@@ -111,10 +120,7 @@ func (s *logService) GetSummaryForDate(ctx context.Context, userID int, date tim
 	from := time.Date(d.Year(), d.Month(), d.Day(), 0, 0, 0, 0, d.Location())
 	to := from.Add(24*time.Hour - time.Nanosecond)
 
-	_, offsetSec := from.Zone()
-	tzOffsetMin := -offsetSec / 60
-
-	summary, err := s.logs.SumByPeriod(ctx, userID, from, to, tzOffsetMin)
+	summary, err := s.logs.SumByPeriod(ctx, userID, from, to)
 	if err != nil {
 		return models.MacroSummary{}, fmt.Errorf("summing entries for date: %w", err)
 	}
@@ -140,10 +146,7 @@ func (s *logService) GetSummary(ctx context.Context, userID int, period string, 
 		to = today.Add(24*time.Hour - time.Nanosecond)
 	}
 
-	_, offsetSec := today.Zone()
-	tzOffsetMin := -offsetSec / 60
-
-	macro, err := s.logs.SumByPeriod(ctx, userID, from, to, tzOffsetMin)
+	macro, err := s.logs.SumByPeriod(ctx, userID, from, to)
 	if err != nil {
 		return models.PeriodSummary{}, fmt.Errorf("summing period entries: %w", err)
 	}

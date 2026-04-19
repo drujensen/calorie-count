@@ -18,10 +18,8 @@ type LogRepository interface {
 	ListByUserAndDate(ctx context.Context, userID int, date time.Time) ([]models.LogEntry, error)
 	Delete(ctx context.Context, entryID int, userID int) error
 	// SumByPeriod sums macros for entries between from and to (inclusive).
-	// tzOffsetMin is the client's timezone offset in minutes west of UTC
-	// (matches JavaScript's getTimezoneOffset(); PDT = 420, JST = -540).
-	// It is used to group entries by local date rather than UTC date.
-	SumByPeriod(ctx context.Context, userID int, from, to time.Time, tzOffsetMin int) (models.MacroSummary, error)
+	// from's Location is used to group entries by local calendar date for the Days count.
+	SumByPeriod(ctx context.Context, userID int, from, to time.Time) (models.MacroSummary, error)
 }
 
 type logRepository struct {
@@ -157,18 +155,18 @@ func (r *logRepository) Delete(ctx context.Context, entryID int, userID int) err
 }
 
 // SumByPeriod returns macro totals and distinct local-day count for the given period.
-// tzOffsetMin follows the JavaScript getTimezoneOffset() convention: positive = west of UTC
-// (PDT = 420, JST = -540). It is applied to logged_at before grouping by date so that
-// entries spanning UTC midnight within a single local day are counted as one day.
-func (r *logRepository) SumByPeriod(ctx context.Context, userID int, from, to time.Time, tzOffsetMin int) (models.MacroSummary, error) {
+// The timezone offset is derived from from.Location() so the caller only needs to
+// pass a properly zoned time — no separate offset parameter.
+func (r *logRepository) SumByPeriod(ctx context.Context, userID int, from, to time.Time) (models.MacroSummary, error) {
 	fromStr := from.UTC().Format(time.RFC3339)
 	toStr := to.UTC().Format(time.RFC3339)
 
-	// Build a SQLite datetime modifier that converts UTC → local time.
-	// getTimezoneOffset() is positive for zones west of UTC, so negate to get
-	// the number of minutes to ADD to UTC to reach local time.
-	// e.g. PDT (420) → "-420 minutes"; JST (-540) → "540 minutes"
-	tzMod := fmt.Sprintf("%d minutes", -tzOffsetMin)
+	// Derive the UTC offset from the location baked into from.
+	// time.Zone returns seconds east of UTC; dividing by 60 gives minutes east,
+	// which is what SQLite's datetime modifier expects (e.g. "+540 minutes" for JST,
+	// "-420 minutes" for PDT).
+	_, offsetSec := from.Zone()
+	tzMod := fmt.Sprintf("%d minutes", offsetSec/60)
 
 	var summary models.MacroSummary
 	err := r.db.QueryRowContext(ctx,

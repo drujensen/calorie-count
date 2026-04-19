@@ -223,7 +223,7 @@ func (s *aiServiceImpl) StartSession(ctx context.Context, userID int, imageBase6
 	s.sessions[sessionID] = conv
 	s.mu.Unlock()
 
-	if strings.HasPrefix(strings.TrimSpace(resp.Message.Content), "{") {
+	if strings.Contains(resp.Message.Content, "{") || strings.Contains(resp.Message.Content, "[") {
 		return sessionID, "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil
 	}
 	return sessionID, resp.Message.Content, false, nil
@@ -282,7 +282,7 @@ func (s *aiServiceImpl) Continue(ctx context.Context, sessionID string, userAnsw
 	if lastResp == nil {
 		return "", false, nil, lastErr
 	}
-	if strings.HasPrefix(strings.TrimSpace(lastResp.Message.Content), "{") {
+	if strings.Contains(lastResp.Message.Content, "{") || strings.Contains(lastResp.Message.Content, "[") {
 		return "I wasn't able to estimate the nutritional values. Could you provide more details about the food?", false, nil, nil
 	}
 	return lastResp.Message.Content, false, nil, nil
@@ -327,7 +327,7 @@ Apply the correction and return the updated entry as JSON.`,
 IMPORTANT: Always provide realistic estimates for ALL of protein_g, fat_g, and carbs_g — never leave them at 0 unless the food truly has none of that macro. The calories should approximately equal (protein_g × 4) + (fat_g × 9) + (carbs_g × 4).
 
 Respond with only this JSON, filling in the correct values:
-{"log": {"food_name": "string", "calories": integer, "protein_g": float, "fat_g": float, "carbs_g": float, "amount": float, "unit": "string"}}`
+{"logs": [{"food_name": "string", "calories": integer, "protein_g": float, "fat_g": float, "carbs_g": float, "amount": float, "unit": "string"}]}`
 
 	msgs := []ollamaMessage{
 		{Role: "system", Content: correctPrompt},
@@ -359,8 +359,7 @@ type logItem struct {
 }
 
 // parseLogEntries checks if the model response contains JSON log entries.
-// It accepts both the multi-item format {"logs":[...]} and the legacy single-item
-// format {"log":{...}}. Returns the entries, a confirmation message, and nil on success.
+// Expects the format {"logs":[...]}. Returns the entries, a confirmation message, and nil on success.
 func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, error) {
 	slog.Debug("LLM raw response", "content", content)
 	start := strings.Index(content, "{")
@@ -374,13 +373,6 @@ func parseLogEntries(content string, userID int) ([]*models.LogEntry, string, er
 	}
 	if err := json.Unmarshal(raw, &multi); err == nil && len(multi.Logs) > 0 {
 		return buildEntries(multi.Logs, userID)
-	}
-
-	var single struct {
-		Log logItem `json:"log"`
-	}
-	if err := json.Unmarshal(raw, &single); err == nil && single.Log.FoodName != "" {
-		return buildEntries([]logItem{single.Log}, userID)
 	}
 
 	return nil, "", errors.New("no valid log entries found in JSON")

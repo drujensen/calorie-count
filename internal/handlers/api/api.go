@@ -164,9 +164,11 @@ func (h *APIHandler) PhotoLogEntry(w http.ResponseWriter, r *http.Request) {
 	if done {
 		for _, e := range h.aiSvc.GetResult(sessionID) {
 			created, saveErr := h.logSvc.AddEntry(r.Context(), user.ID, *e)
-			if saveErr == nil {
-				persistedEntries = append(persistedEntries, created)
+			if saveErr != nil {
+				writeJSONError(w, "failed to save entry: "+saveErr.Error(), http.StatusInternalServerError)
+				return
 			}
+			persistedEntries = append(persistedEntries, created)
 		}
 	}
 
@@ -414,14 +416,3 @@ func writeJSONError(w http.ResponseWriter, msg string, statusCode int) {
 	json.NewEncoder(w).Encode(resp) //nolint:errcheck
 }
 
-// parseFloatDefault parses a float64 from s, returning def on error.
-func parseFloatDefault(s string, def float64) float64 {
-	if s == "" {
-		return def
-	}
-	v, err := strconv.ParseFloat(s, 64)
-	if err != nil {
-		return def
-	}
-	return v
-}

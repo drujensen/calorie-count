@@ -433,7 +433,7 @@ func (h *WebHandler) Settings(w http.ResponseWriter, r *http.Request) {
 	csrfToken := middleware.GetCSRFToken(r)
 	saved := r.URL.Query().Get("saved") == "1"
 	h.render(w, "settings.html", SettingsPageData{
-		PageData: PageData{User: &user, CSRFToken: csrfToken},
+		PageData: PageData{ActiveTab: "settings", User: &user, CSRFToken: csrfToken},
 		Success:  saved,
 	})
 }
@@ -446,7 +446,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 
 	if err := r.ParseForm(); err != nil {
 		h.render(w, "settings.html", SettingsPageData{
-			PageData: PageData{User: &user, Error: "invalid form data", CSRFToken: csrfToken},
+			PageData: PageData{ActiveTab: "settings", User: &user, Error: "invalid form data", CSRFToken: csrfToken},
 		})
 		return
 	}
@@ -484,7 +484,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 		weight, err = strconv.ParseFloat(weightStr, 64)
 		if err != nil || weight < 0 {
 			h.render(w, "settings.html", SettingsPageData{
-				PageData: PageData{User: &user, Error: "invalid weight value", CSRFToken: csrfToken},
+				PageData: PageData{ActiveTab: "settings", User: &user, Error: "invalid weight value", CSRFToken: csrfToken},
 			})
 			return
 		}
@@ -497,7 +497,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 		targetWeight, err = strconv.ParseFloat(targetWeightStr, 64)
 		if err != nil || targetWeight < 0 {
 			h.render(w, "settings.html", SettingsPageData{
-				PageData: PageData{User: &user, Error: "invalid target weight value", CSRFToken: csrfToken},
+				PageData: PageData{ActiveTab: "settings", User: &user, Error: "invalid target weight value", CSRFToken: csrfToken},
 			})
 			return
 		}
@@ -509,7 +509,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 		age, err = strconv.Atoi(ageStr)
 		if err != nil || age < 0 || age > 120 {
 			h.render(w, "settings.html", SettingsPageData{
-				PageData: PageData{User: &user, Error: "age must be between 0 and 120", CSRFToken: csrfToken},
+				PageData: PageData{ActiveTab: "settings", User: &user, Error: "age must be between 0 and 120", CSRFToken: csrfToken},
 			})
 			return
 		}
@@ -521,7 +521,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 		heightFt, err = strconv.Atoi(heightFtStr)
 		if err != nil || heightFt < 0 || heightFt > 9 {
 			h.render(w, "settings.html", SettingsPageData{
-				PageData: PageData{User: &user, Error: "invalid height (feet)", CSRFToken: csrfToken},
+				PageData: PageData{ActiveTab: "settings", User: &user, Error: "invalid height (feet)", CSRFToken: csrfToken},
 			})
 			return
 		}
@@ -533,7 +533,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 		heightIn, err = strconv.ParseFloat(heightInStr, 64)
 		if err != nil || heightIn < 0 || heightIn >= 12 {
 			h.render(w, "settings.html", SettingsPageData{
-				PageData: PageData{User: &user, Error: "invalid height (inches must be 0-11)", CSRFToken: csrfToken},
+				PageData: PageData{ActiveTab: "settings", User: &user, Error: "invalid height (inches must be 0-11)", CSRFToken: csrfToken},
 			})
 			return
 		}
@@ -544,7 +544,7 @@ func (h *WebHandler) PostSettings(w http.ResponseWriter, r *http.Request) {
 
 	if err := h.userRepo.UpdateProfile(r.Context(), user.ID, goal, weight, targetWeight, age, totalInches, sex, weightLossRate, activityLevel); err != nil {
 		h.render(w, "settings.html", SettingsPageData{
-			PageData: PageData{User: &user, Error: "failed to save settings", CSRFToken: csrfToken},
+			PageData: PageData{ActiveTab: "settings", User: &user, Error: "failed to save settings", CSRFToken: csrfToken},
 		})
 		return
 	}
@@ -665,20 +665,18 @@ func (h *WebHandler) Health(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok"}`)) //nolint:errcheck
 }
 
-// clientLocation returns a *time.Location derived from the "tz" query param
+// clientLocation returns a *time.Location derived from the "tz" form or query param
 // set by the browser. The value is getTimezoneOffset() — minutes *behind* UTC
 // (positive = west of UTC, e.g. PST = 480). Falls back to UTC.
 func clientLocation(r *http.Request) *time.Location {
-	tzStr := r.URL.Query().Get("tz")
+	tzStr := r.FormValue("tz")
 	if tzStr == "" {
-		return time.UTC
+		tzStr = r.URL.Query().Get("tz")
 	}
 	offsetMin, err := strconv.Atoi(tzStr)
 	if err != nil {
 		return time.UTC
 	}
-	// getTimezoneOffset() is positive for zones west of UTC, but time.FixedZone
-	// expects seconds east of UTC — so negate.
 	return time.FixedZone("client", -offsetMin*60)
 }
 
