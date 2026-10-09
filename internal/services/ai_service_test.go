@@ -15,7 +15,7 @@ import (
 func newTestAIService(serverURL string) AIService {
 	cfg := &config.Config{
 		OllamaAPIURL: serverURL,
-		OllamaModel:  "llama-vision:latest",
+		OllamaModel:  "qwen3-vision:latest",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	_ = cancel // caller responsible for lifetime; we cancel immediately for tests
@@ -27,7 +27,7 @@ func newTestAIService(serverURL string) AIService {
 
 func makeTextResponse(content string) ollamaChatResponse {
 	return ollamaChatResponse{
-		Model:   "llama-vision:latest",
+		Model:   "qwen3-vision:latest",
 		Message: ollamaMessage{Role: "assistant", Content: content},
 		Done:    true,
 	}
@@ -245,7 +245,7 @@ func TestAIService_Continue_UnknownSession(t *testing.T) {
 func TestAIService_SessionCleanup(t *testing.T) {
 	cfg := &config.Config{
 		OllamaAPIURL: "http://localhost:11434",
-		OllamaModel:  "llama-vision:latest",
+		OllamaModel:  "qwen3-vision:latest",
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

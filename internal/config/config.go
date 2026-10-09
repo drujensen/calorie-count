@@ -20,7 +20,7 @@ func Load() (*Config, error) {
 		Env:          getEnv("ENV", "development"),
 		DatabasePath: getEnv("DATABASE_PATH", "./calorie-count.db"),
 		OllamaAPIURL: getEnv("OLLAMA_API_URL", "http://localhost:11434"),
-		OllamaModel:  getEnv("OLLAMA_MODEL", "llama-vision:latest"),
+		OllamaModel:  getEnv("OLLAMA_MODEL", "qwen3-vision:latest"),
 	}, nil
 }
 

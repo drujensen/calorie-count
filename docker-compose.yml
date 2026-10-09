@@ -11,4 +11,4 @@ services:
       - DATABASE_PATH=/data/calorie-count.db
       - ENV=production
       - OLLAMA_API_URL=${OLLAMA_API_URL:-http://localhost:11434}
-      - OLLAMA_MODEL=${OLLAMA_MODEL:-llama-vision:latest}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-qwen3-vision:latest}

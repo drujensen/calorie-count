@@ -28,7 +28,7 @@ func TestLoad_Defaults(t *testing.T) {
 		{"Env", cfg.Env, "development"},
 		{"DatabasePath", cfg.DatabasePath, "./calorie-count.db"},
 		{"OllamaAPIURL", cfg.OllamaAPIURL, "http://localhost:11434"},
-		{"OllamaModel", cfg.OllamaModel, "llama-vision:latest"},
+		{"OllamaModel", cfg.OllamaModel, "qwen3-vision:latest"},
 	}
 
 	for _, tt := range tests {
